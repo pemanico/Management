@@ -11,7 +11,12 @@ npm run dev      # UI em http://127.0.0.1:5173
 npm test         # testes do backend
 ```
 
-Requer Node >= 22.13 (usa `node:sqlite` nativo; sem dependências de backend).
+Requer Node >= 22.13 (`node -v` para ver). Usa `node:sqlite` nativo e o `--experimental-strip-types` já vem nos scripts, por isso não precisa de dependências de backend. Em Node < 22.13 o `node:sqlite` não existe: atualiza o Node.
+
+Para usar uma base de dados de teste separada:
+
+- macOS/Linux: `DB_PATH=./data/teste.sqlite npm run server`
+- Windows (PowerShell): `$env:DB_PATH='./data/teste.sqlite'; npm run server`
 
 ## Decisões
 

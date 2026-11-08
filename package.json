@@ -6,10 +6,10 @@
   "engines": { "node": ">=22.13" },
   "scripts": {
     "dev": "vite",
-    "server": "node server/index.ts",
+    "server": "node --experimental-strip-types server/index.ts",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --test server/*.test.ts src/*.test.ts"
+    "test": "node --experimental-strip-types --test server/*.test.ts src/*.test.ts"
   },
   "dependencies": {
     "react": "^19.1.0",
