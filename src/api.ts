@@ -14,6 +14,8 @@ import type {
   Summary,
   Team,
   TeamInput,
+  Training,
+  TrainingInput,
 } from '../shared/types.ts';
 
 export class ApiError extends Error {}
@@ -66,6 +68,12 @@ export const api = {
   skills: () => request<Skill[]>('/skills'),
   ratings: () => request<Rating[]>('/ratings'),
   requirements: () => request<Requirement[]>('/requirements'),
+  trainings: () => request<Training[]>('/trainings'),
+  saveTraining: (input: TrainingInput, id?: number) =>
+    id === undefined
+      ? request<Training>('/trainings', 'POST', input)
+      : request<Training>(`/trainings/${id}`, 'PUT', input),
+  deleteTraining: (id: number) => request<{ ok: true }>(`/trainings/${id}`, 'DELETE'),
   saveSkill: (input: SkillInput, id?: number) =>
     id === undefined ? request<Skill>('/skills', 'POST', input) : request<Skill>(`/skills/${id}`, 'PUT', input),
   deleteSkill: (id: number) => request<{ ok: true }>(`/skills/${id}`, 'DELETE'),

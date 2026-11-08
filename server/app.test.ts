@@ -220,3 +220,61 @@ test('migração: base antiga sem prioridade/HC nos projetos continua a abrir', 
   assert.equal(p.plannedHeadcount, 0);
   db.close();
 });
+
+test('formação: fecha gaps, alerta quando não fecha e quando está em atraso', async () => {
+  const { call, close } = await setup();
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
+  const mk = async (code: string) =>
+    ((await call('/api/consultants', 'POST', {
+      code, teamId: team.id, profile: 'x', seniority: 'pleno',
+      costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
+    })).data as { id: number }).id;
+  const [c1, c2, c3] = [await mk('C1'), await mk('C2'), await mk('C3')];
+  const skill = (await call('/api/skills', 'POST', { name: 'EMIR', category: null })).data as { id: number };
+  const today = businessDate();
+  // C1 já é nível 3; exige-se 3 em 3 pessoas -> gap 2
+  await call('/api/ratings', 'PUT', { consultantId: c1, skillId: skill.id, level: 3, validated: true, evidence: 'Reporting EMIR', assessedAt: today });
+  await call('/api/requirements', 'PUT', { teamId: team.id, skillId: skill.id, requiredLevel: 3, minPeople: 3 });
+
+  const tr = { skillId: skill.id, kind: 'course', title: 'Curso EMIR', status: 'planned', dueDate: null, costCents: 0 };
+  // validação
+  assert.equal((await call('/api/trainings', 'POST', { ...tr, consultantId: c2, targetLevel: 5 })).status, 400);
+  assert.equal((await call('/api/trainings', 'POST', { ...tr, consultantId: c2, targetLevel: 3, kind: 'yoga' })).status, 400);
+  assert.equal((await call('/api/trainings', 'POST', { ...tr, consultantId: 999, targetLevel: 3 })).status, 409);
+
+  let s = (await call('/api/summary')).data as any;
+  assert.equal(s.skills.coverage[0].gap, 2);
+  assert.equal(s.skills.coverage[0].gapAfterTraining, 2);
+  assert.ok(s.alerts.some((a: any) => a.type === 'training_gap_uncovered'));
+
+  // uma formação que chega ao nível exigido fecha 1 dos 2; uma que fica aquém não conta
+  await call('/api/trainings', 'POST', { ...tr, consultantId: c2, targetLevel: 3 });
+  const short = (await call('/api/trainings', 'POST', { ...tr, consultantId: c3, targetLevel: 2, title: 'Intro EMIR' })).data as { id: number };
+  s = (await call('/api/summary')).data as any;
+  assert.equal(s.skills.coverage[0].inTraining, 1);
+  assert.equal(s.skills.coverage[0].gapAfterTraining, 1);
+  assert.ok(s.alerts.some((a: any) => a.type === 'training_gap_uncovered'));
+
+  // subir o alvo do C3 para 3 fecha o gap planeado: deixa de haver alerta "não coberto"
+  await call(`/api/trainings/${short.id}`, 'PUT', { ...tr, consultantId: c3, targetLevel: 3, title: 'Intro EMIR' });
+  s = (await call('/api/summary')).data as any;
+  assert.equal(s.skills.coverage[0].gapAfterTraining, 0);
+  assert.ok(!s.alerts.some((a: any) => a.type === 'training_gap_uncovered'));
+  assert.equal(s.training.openCount, 2);
+
+  // em atraso; concluída/cancelada deixa de contar como em aberto
+  await call(`/api/trainings/${short.id}`, 'PUT', { ...tr, consultantId: c3, targetLevel: 3, title: 'Intro EMIR', dueDate: '2020-01-01', costCents: 150_00 });
+  s = (await call('/api/summary')).data as any;
+  assert.ok(s.alerts.some((a: any) => a.type === 'training_overdue'));
+  assert.equal(s.training.overdueCount, 1);
+  assert.equal(s.training.openCostCents, 150_00);
+  await call(`/api/trainings/${short.id}`, 'PUT', { ...tr, consultantId: c3, targetLevel: 3, title: 'Intro EMIR', status: 'done', dueDate: '2020-01-01' });
+  s = (await call('/api/summary')).data as any;
+  assert.equal(s.training.overdueCount, 0);
+  assert.equal(s.training.openCount, 1);
+
+  // apagar competência apaga as formações
+  await call(`/api/skills/${skill.id}`, 'DELETE');
+  assert.deepEqual((await call('/api/trainings')).data, []);
+  close();
+});

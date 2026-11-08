@@ -4,6 +4,8 @@ import {
   PROJECT_STATUSES,
   SENIORITIES,
   STATUSES,
+  TRAINING_KINDS,
+  TRAINING_STATUSES,
   type ConsultantInput,
   type Priority,
   type ProjectInput,
@@ -15,6 +17,9 @@ import {
   type Status,
   type AllocationInput,
   type TeamInput,
+  type TrainingInput,
+  type TrainingKind,
+  type TrainingStatus,
 } from '../shared/types.ts';
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -193,4 +198,36 @@ export function parseRequirement(body: unknown): Result<RequirementInput> {
   const minPeople = intIn(body.minPeople, 1, 1000);
   if (minPeople === null) return { ok: false, error: 'Mínimo de pessoas inválido (≥ 1).' };
   return { ok: true, value: { teamId, skillId, requiredLevel, minPeople } };
+}
+
+export function parseTraining(body: unknown): Result<TrainingInput> {
+  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  const consultantId = intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER);
+  const skillId = intIn(body.skillId, 1, Number.MAX_SAFE_INTEGER);
+  if (consultantId === null) return { ok: false, error: 'Consultor inválido.' };
+  if (skillId === null) return { ok: false, error: 'Competência inválida.' };
+  const targetLevel = intIn(body.targetLevel, 1, 4);
+  if (targetLevel === null) return { ok: false, error: 'Nível alvo inválido (1–4).' };
+  if (!TRAINING_KINDS.includes(body.kind as TrainingKind)) return { ok: false, error: 'Tipo de formação inválido.' };
+  const title = text(body.title, 100);
+  if (title === null) return { ok: false, error: 'Título inválido (1–100 caracteres).' };
+  if (!TRAINING_STATUSES.includes(body.status as TrainingStatus))
+    return { ok: false, error: 'Estado da formação inválido.' };
+  const due = optDate(body.dueDate);
+  if (!due.ok) return { ok: false, error: 'Data limite inválida.' };
+  const costCents = intIn(body.costCents ?? 0, 0, MAX_CENTS);
+  if (costCents === null) return { ok: false, error: 'Custo inválido.' };
+  return {
+    ok: true,
+    value: {
+      consultantId,
+      skillId,
+      targetLevel,
+      kind: body.kind as TrainingKind,
+      title,
+      status: body.status as TrainingStatus,
+      dueDate: due.value,
+      costCents,
+    },
+  };
 }

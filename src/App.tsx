@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Allocation, Consultant, Project, Rating, Requirement, Skill, Summary, Team } from '../shared/types.ts';
+import type { Allocation, Consultant, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
 import { api, ApiError } from './api.ts';
 import { SummaryView } from './views/SummaryView.tsx';
 import { TeamsView } from './views/TeamsView.tsx';
@@ -9,6 +9,7 @@ import { ProjectsView } from './views/ProjectsView.tsx';
 import { AllocationsView } from './views/AllocationsView.tsx';
 import { SkillsView } from './views/SkillsView.tsx';
 import { MatrixView } from './views/MatrixView.tsx';
+import { TrainingView } from './views/TrainingView.tsx';
 
 const ROUTES = [
   { id: 'resumo', label: 'Resumo' },
@@ -18,6 +19,7 @@ const ROUTES = [
   { id: 'alocacoes', label: 'Alocações' },
   { id: 'competencias', label: 'Competências' },
   { id: 'matriz', label: 'Skill matrix' },
+  { id: 'formacao', label: 'Formação' },
   { id: 'exportar', label: 'Exportar' },
 ] as const;
 type RouteId = (typeof ROUTES)[number]['id'];
@@ -36,6 +38,7 @@ type Data = {
   skills: Skill[];
   ratings: Rating[];
   requirements: Requirement[];
+  trainings: Training[];
 };
 type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: Data };
 
@@ -43,7 +46,7 @@ export function App() {
   const [hash, setHash] = useState(readHash);
   const { route, params } = hash;
   const [state, setState] = useState<State>({ status: 'loading' });
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
 
   useEffect(() => {
     const onHash = () => setHash(readHash());
@@ -54,7 +57,7 @@ export function App() {
   // Os três pedidos são independentes: arrancam em paralelo (sem waterfall).
   const load = useCallback(async () => {
     try {
-      const [summary, teams, consultants, projects, allocations, skills, ratings, requirements] = await Promise.all([
+      const [summary, teams, consultants, projects, allocations, skills, ratings, requirements, trainings] = await Promise.all([
         api.summary(),
         api.teams(),
         api.consultants(),
@@ -63,10 +66,11 @@ export function App() {
         api.skills(),
         api.ratings(),
         api.requirements(),
+        api.trainings(),
       ]);
       setState({
         status: 'ready',
-        data: { summary, teams, consultants, projects, allocations, skills, ratings, requirements },
+        data: { summary, teams, consultants, projects, allocations, skills, ratings, requirements, trainings },
       });
     } catch (err) {
       setState({ status: 'error', message: err instanceof ApiError ? err.message : 'Ocorreu um erro.' });
@@ -78,15 +82,16 @@ export function App() {
   }, [load]);
 
   useEffect(() => {
-    if (notice === '') return;
-    const id = setTimeout(() => setNotice(''), 4000);
+    if (notice === null) return;
+    const id = setTimeout(() => setNotice(null), 4000);
     return () => clearTimeout(id);
   }, [notice]);
 
   // Chamado pelas vistas depois de gravar/apagar: recarrega e confirma ao utilizador.
   const saved = useCallback(async () => {
     await load();
-    setNotice('Alterações guardadas.');
+    // Objeto novo a cada gravação: reinicia o temporizador e volta a anunciar mesmo com o mesmo texto.
+    setNotice((prev) => ({ id: (prev?.id ?? 0) + 1, text: 'Alterações guardadas.' }));
   }, [load]);
 
   return (
@@ -161,12 +166,24 @@ export function App() {
                 onChanged={saved}
               />
             )}
+            {route === 'formacao' && (
+              <TrainingView
+                teams={state.data.teams}
+                consultants={state.data.consultants}
+                skills={state.data.skills}
+                ratings={state.data.ratings}
+                requirements={state.data.requirements}
+                trainings={state.data.trainings}
+                coverage={state.data.summary.skills.coverage}
+                onChanged={saved}
+              />
+            )}
             {route === 'exportar' && <ExportView summary={state.data.summary} />}
           </>
         )}
       </main>
       <p role="status" aria-live="polite" className="toast">
-        {notice}
+        {notice?.text ?? ''}
       </p>
     </>
   );

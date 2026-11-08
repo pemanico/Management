@@ -86,6 +86,25 @@ export type RequirementInput = {
 };
 export type Requirement = RequirementInput & { updatedAt: string };
 
+export const TRAINING_KINDS = ['course', 'certification', 'mentoring', 'on_the_job'] as const;
+export type TrainingKind = (typeof TRAINING_KINDS)[number];
+
+export const TRAINING_STATUSES = ['planned', 'in_progress', 'done', 'cancelled'] as const;
+export type TrainingStatus = (typeof TRAINING_STATUSES)[number];
+
+export type TrainingInput = {
+  consultantId: number;
+  skillId: number;
+  targetLevel: number; // 1–4: nível que a formação deve levar o consultor a atingir
+  kind: TrainingKind;
+  title: string;
+  status: TrainingStatus;
+  dueDate: string | null; // YYYY-MM-DD
+  costCents: number; // opcional: 0 = sem custo definido
+};
+
+export type Training = TrainingInput & { id: number; updatedAt: string };
+
 export type Alert = {
   type:
     | 'budget_over_90'
@@ -102,7 +121,9 @@ export type Alert = {
     | 'consultant_unallocated'
     | 'skill_gap'
     | 'skill_unvalidated'
-    | 'skill_assessment_old';
+    | 'skill_assessment_old'
+    | 'training_overdue'
+    | 'training_gap_uncovered';
   scope: string;
   message: string;
 };
@@ -156,6 +177,8 @@ export type SkillCoverage = {
   qualified: number; // ativos com nível >= requiredLevel
   qualifiedValidated: number; // desses, com avaliação validada
   gap: number; // max(0, minPeople - qualified)
+  inTraining: number; // não qualificados com formação planeada/em curso que atinge o nível exigido
+  gapAfterTraining: number; // max(0, gap - inTraining)
 };
 
 export type Summary = {
@@ -176,6 +199,11 @@ export type Summary = {
     ratingCount: number;
     validatedRatioBp: number | null;
     coverage: SkillCoverage[];
+  };
+  training: {
+    openCount: number; // planeadas + em curso
+    overdueCount: number;
+    openCostCents: number; // 0 = sem custos definidos
   };
   alerts: Alert[];
 };

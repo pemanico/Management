@@ -1,6 +1,6 @@
 # Gestão da Unidade
 
-App local para registar equipas, budget, headcount, consultores/rates, projetos e alocações, skill matrix, e exportar um resumo para o Claude.
+App local para registar equipas, budget, headcount, consultores/rates, projetos e alocações, skill matrix, formação, e exportar um resumo para o Claude.
 
 ## Arrancar
 
@@ -31,7 +31,8 @@ Para usar uma base de dados de teste separada:
 - Moeda única (EUR). Sem dependências além de React/Vite/TS.
 
 - Skill matrix: níveis 0–4; cada avaliação é *validada* (exige evidência) ou *autoavaliação*. Os requisitos são por equipa (nível mínimo + nº mínimo de pessoas). Alerta de avaliações com mais de 365 dias. O export para o Claude leva só a cobertura agregada, nunca as avaliações individuais.
+- Formação: plano por consultor e competência (tipo, nível alvo, estado, data limite, custo opcional). Liga-se aos gaps da skill matrix: uma formação **em aberto** só conta como cobertura se levar o consultor ao nível exigido (`gapAfterTraining`). Concluir uma formação **não** altera o nível na skill matrix: essa avaliação é tua, com evidência (a app avisa quando falta atualizar). O custo em euros é opcional.
 
 ## Próximos módulos
 
-Formação (plano por gap) e objetivos & avaliações.
+Objetivos & avaliações, e a exportação (backup/restauro e formatos para o Claude).

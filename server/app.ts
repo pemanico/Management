@@ -10,6 +10,7 @@ import {
   parseRequirement,
   parseSkill,
   parseTeam,
+  parseTraining,
 } from './validate.ts';
 
 const MAX_BODY = 64 * 1024;
@@ -85,6 +86,7 @@ export function createApp(db: Db): Server {
             db.listSkills(),
             db.listRatings(),
             db.listRequirements(),
+            db.listTrainings(),
           ),
         );
       }
@@ -152,6 +154,25 @@ export function createApp(db: Db): Server {
               people.get(a.consultantId) ?? '',
               a.allocationPct,
               a.updatedAt,
+            ]),
+          );
+          return send(res, 200, csv, 'text/csv');
+        }
+        if (kind === 'trainings') {
+          const skills = new Map(db.listSkills().map((k) => [k.id, k.name]));
+          const people = new Map(db.listConsultants().map((c) => [c.id, c.code]));
+          const csv = toCsv(
+            ['consultor', 'competencia', 'nivel_alvo', 'tipo', 'titulo', 'estado', 'data_limite', 'custo_eur', 'atualizado_em'],
+            db.listTrainings().map((t) => [
+              people.get(t.consultantId) ?? '',
+              skills.get(t.skillId) ?? '',
+              t.targetLevel,
+              t.kind,
+              t.title,
+              t.status,
+              t.dueDate,
+              centsToDecimal(t.costCents),
+              t.updatedAt,
             ]),
           );
           return send(res, 200, csv, 'text/csv');
@@ -328,6 +349,39 @@ export function createApp(db: Db): Server {
         }
         if (idPart && method === 'DELETE') {
           if (db.deleteSkill(parseId(idPart)) === 0) throw new HttpError(404, 'Competência não encontrada.');
+          return send(res, 200, { ok: true });
+        }
+      }
+
+      if (resource === 'trainings') {
+        const guard = (e: unknown): never => {
+          if (isConstraint(e)) throw new HttpError(409, 'Consultor ou competência inválidos.');
+          throw e;
+        };
+        if (!idPart && method === 'GET') return send(res, 200, db.listTrainings());
+        if (!idPart && method === 'POST') {
+          const p = parseTraining(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            return send(res, 201, db.getTraining(db.createTraining(p.value)));
+          } catch (e) {
+            return guard(e);
+          }
+        }
+        if (idPart && method === 'PUT') {
+          const id = parseId(idPart);
+          const p = parseTraining(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            if (db.updateTraining(id, p.value) === 0) throw new HttpError(404, 'Formação não encontrada.');
+          } catch (e) {
+            if (e instanceof HttpError) throw e;
+            return guard(e);
+          }
+          return send(res, 200, db.getTraining(id));
+        }
+        if (idPart && method === 'DELETE') {
+          if (db.deleteTraining(parseId(idPart)) === 0) throw new HttpError(404, 'Formação não encontrada.');
           return send(res, 200, { ok: true });
         }
       }

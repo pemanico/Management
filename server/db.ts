@@ -14,6 +14,8 @@ import type {
   ProjectInput,
   Team,
   TeamInput,
+  Training,
+  TrainingInput,
 } from '../shared/types.ts';
 
 const SCHEMA = `
@@ -73,6 +75,18 @@ CREATE TABLE IF NOT EXISTS ratings (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (consultant_id, skill_id)
 );
+CREATE TABLE IF NOT EXISTS trainings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL REFERENCES consultants(id) ON DELETE CASCADE,
+  skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  target_level INTEGER NOT NULL CHECK (target_level BETWEEN 1 AND 4),
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  due_date TEXT,
+  cost_cents INTEGER NOT NULL DEFAULT 0 CHECK (cost_cents >= 0),
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS requirements (
   team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
@@ -87,6 +101,10 @@ const SKILL_SELECT = `SELECT id, name, category, updated_at AS updatedAt FROM sk
 
 const RATING_SELECT = `SELECT consultant_id AS consultantId, skill_id AS skillId, level, validated,
   evidence, assessed_at AS assessedAt, updated_at AS updatedAt FROM ratings`;
+
+const TRAINING_SELECT = `SELECT id, consultant_id AS consultantId, skill_id AS skillId,
+  target_level AS targetLevel, kind, title, status, due_date AS dueDate, cost_cents AS costCents,
+  updated_at AS updatedAt FROM trainings`;
 
 const REQ_SELECT = `SELECT team_id AS teamId, skill_id AS skillId, required_level AS requiredLevel,
   min_people AS minPeople, updated_at AS updatedAt FROM requirements`;
@@ -271,6 +289,31 @@ export function openDb(path: string) {
         db.prepare('DELETE FROM ratings WHERE consultant_id=? AND skill_id=?').run(consultantId, skillId)
           .changes,
       ),
+
+    listTrainings: () => db.prepare(`${TRAINING_SELECT} ORDER BY id`).all() as Training[],
+    getTraining: (id: number) =>
+      db.prepare(`${TRAINING_SELECT} WHERE id = ?`).get(id) as Training | undefined,
+    createTraining: (t: TrainingInput) =>
+      Number(
+        db
+          .prepare(
+            `INSERT INTO trainings (consultant_id, skill_id, target_level, kind, title, status, due_date,
+             cost_cents, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+          )
+          .run(t.consultantId, t.skillId, t.targetLevel, t.kind, t.title, t.status, t.dueDate, t.costCents, now())
+          .lastInsertRowid,
+      ),
+    updateTraining: (id: number, t: TrainingInput) =>
+      Number(
+        db
+          .prepare(
+            `UPDATE trainings SET consultant_id=?, skill_id=?, target_level=?, kind=?, title=?, status=?,
+             due_date=?, cost_cents=?, updated_at=? WHERE id=?`,
+          )
+          .run(t.consultantId, t.skillId, t.targetLevel, t.kind, t.title, t.status, t.dueDate, t.costCents, now(), id)
+          .changes,
+      ),
+    deleteTraining: (id: number) => Number(db.prepare('DELETE FROM trainings WHERE id=?').run(id).changes),
 
     listRequirements: () =>
       db.prepare(`${REQ_SELECT} ORDER BY team_id, skill_id`).all() as Requirement[],

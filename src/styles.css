@@ -87,3 +87,5 @@ tr.muted { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+.candidates { display: inline-flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }

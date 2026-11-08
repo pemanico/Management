@@ -13,6 +13,7 @@ import type {
   Summary,
   Team,
   TeamSummary,
+  Training,
 } from '../shared/types.ts';
 
 const DAY_MS = 86_400_000;
@@ -32,6 +33,7 @@ function pct(bp: number): string {
 
 const fte = (allocatedPct: number) => (allocatedPct / 100).toFixed(1).replace('.', ',');
 const isOpenProject = (p: Project) => p.status !== 'done';
+const isOpenTraining = (t: Training) => t.status === 'planned' || t.status === 'in_progress';
 
 export function buildSummary(
   teams: Team[],
@@ -41,6 +43,7 @@ export function buildSummary(
   skills: Skill[],
   ratings: Rating[],
   requirements: Requirement[],
+  trainings: Training[],
   now = new Date(),
 ): Summary {
   const today = businessDate(now);
@@ -135,6 +138,23 @@ export function buildSummary(
       const qualified = qualifiedRatings.length;
       const qualifiedValidated = qualifiedRatings.filter((r) => r.validated).length;
       const skillGap = Math.max(0, rq.minPeople - qualified);
+      const qualifiedIds = new Set(
+        members.filter((m) => (ratingMap.get(ratingKey(m.id, rq.skillId))?.level ?? -1) >= rq.requiredLevel).map((m) => m.id),
+      );
+      // Só conta quem ainda não é qualificado e tem formação em aberto que chega ao nível exigido.
+      const inTraining = new Set(
+        trainings
+          .filter(
+            (tr) =>
+              isOpenTraining(tr) &&
+              tr.skillId === rq.skillId &&
+              tr.targetLevel >= rq.requiredLevel &&
+              members.some((m) => m.id === tr.consultantId) &&
+              !qualifiedIds.has(tr.consultantId),
+          )
+          .map((tr) => tr.consultantId),
+      ).size;
+      const gapAfterTraining = Math.max(0, skillGap - inTraining);
       coverage.push({
         teamName: t.name,
         skill: skillName,
@@ -143,6 +163,8 @@ export function buildSummary(
         qualified,
         qualifiedValidated,
         gap: skillGap,
+        inTraining,
+        gapAfterTraining,
       });
       if (skillGap > 0) {
         skillGaps += 1;
@@ -151,6 +173,12 @@ export function buildSummary(
           scope: `${t.name} / ${skillName}`,
           message: `Faltam ${skillGap} pessoa(s) com nível ≥ ${rq.requiredLevel} (tem ${qualified}, mínimo ${rq.minPeople}).`,
         });
+        if (gapAfterTraining > 0)
+          alerts.push({
+            type: 'training_gap_uncovered',
+            scope: `${t.name} / ${skillName}`,
+            message: `Mesmo com as formações em aberto (${inTraining}), faltam ${gapAfterTraining} pessoa(s): não há plano que feche o gap.`,
+          });
       } else if (qualifiedValidated < rq.minPeople) {
         alerts.push({
           type: 'skill_unvalidated',
@@ -189,6 +217,17 @@ export function buildSummary(
       skillGaps,
     };
   });
+
+  const personById = new Map(consultants.map((c) => [c.id, c]));
+  const overdueTrainings = trainings.filter((tr) => isOpenTraining(tr) && tr.dueDate !== null && tr.dueDate < today);
+  for (const tr of overdueTrainings) {
+    const c = personById.get(tr.consultantId);
+    alerts.push({
+      type: 'training_overdue',
+      scope: `${c ? (teamById.get(c.teamId)?.name ?? '—') : '—'} / ${c?.code ?? '—'}`,
+      message: `Formação "${tr.title}" com data limite ${tr.dueDate} ultrapassada.`,
+    });
+  }
 
   const projectSummaries: ProjectSummary[] = projects.map((p) => {
     const mine = allocations.filter((a) => a.projectId === p.id);
@@ -254,6 +293,11 @@ export function buildSummary(
           ? Math.round((ratings.filter((r) => r.validated).length * 10_000) / ratings.length)
           : null,
       coverage,
+    },
+    training: {
+      openCount: trainings.filter(isOpenTraining).length,
+      overdueCount: overdueTrainings.length,
+      openCostCents: trainings.filter(isOpenTraining).reduce((a, tr) => a + tr.costCents, 0),
     },
     alerts,
   };

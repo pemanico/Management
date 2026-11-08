@@ -18,10 +18,12 @@ const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   skill_gap: 'Gap de competência',
   skill_unvalidated: 'Competência não validada',
   skill_assessment_old: 'Avaliações antigas',
+  training_overdue: 'Formação em atraso',
+  training_gap_uncovered: 'Gap sem plano de formação',
 };
 
 export function SummaryView({ summary }: { summary: Summary }) {
-  const { totals, teams, alerts, projects, allocations, skills } = summary;
+  const { totals, teams, alerts, projects, allocations, skills, training } = summary;
   const hasMoney = totals.budgetCents > 0; // budget em euros é opcional (muitas unidades só têm budget em headcount)
   return (
     <section aria-labelledby="sum-title">
@@ -32,6 +34,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
         {hasMoney && <div className="card"><dt>Budget total</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
         {hasMoney && <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
         <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
+        <div className="card"><dt>Formações em aberto</dt><dd>{training.openCount}</dd></div>
         <div className="card"><dt>Projetos em aberto</dt><dd>{totals.openProjects}</dd></div>
         <div className="card"><dt>Alertas</dt><dd>{alerts.length}</dd></div>
       </dl>
@@ -163,6 +166,8 @@ export function SummaryView({ summary }: { summary: Summary }) {
                   <th scope="col" className="num">Qualificados</th>
                   <th scope="col" className="num">Validados</th>
                   <th scope="col" className="num">Défice</th>
+                  <th scope="col" className="num">Em formação</th>
+                  <th scope="col" className="num">Défice após formação</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,6 +182,11 @@ export function SummaryView({ summary }: { summary: Summary }) {
                     <td className="num">
                       {c.gap}
                       {c.gap > 0 && <span className="flag"> ▲ gap</span>}
+                    </td>
+                    <td className="num">{c.inTraining}</td>
+                    <td className="num">
+                      {c.gapAfterTraining}
+                      {c.gapAfterTraining > 0 && <span className="flag"> ▲ sem plano</span>}
                     </td>
                   </tr>
                 ))}

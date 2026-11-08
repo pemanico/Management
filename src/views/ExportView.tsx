@@ -28,6 +28,7 @@ export function ExportView({ summary }: { summary: Summary }) {
         <a className="button" href="/api/export?kind=consultants" download="consultores.csv">Descarregar consultores (CSV)</a>
         <a className="button" href="/api/export?kind=projects" download="projetos.csv">Descarregar projetos (CSV)</a>
         <a className="button" href="/api/export?kind=allocations" download="alocacoes.csv">Descarregar alocações (CSV)</a>
+        <a className="button" href="/api/export?kind=trainings" download="formacao.csv">Descarregar formação (CSV)</a>
         <a className="button" href="/api/export?kind=ratings" download="competencias.csv">Descarregar skill matrix (CSV)</a>
       </div>
       <p role="status" aria-live="polite">{status}</p>
