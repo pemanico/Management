@@ -3,12 +3,12 @@ import type { Db } from './db.ts';
 import { buildSummary } from './summary.ts';
 import { centsToDecimal, toCsv } from './csv.ts';
 import {
+  parseAllocation,
   parseConsultant,
   parseProject,
   parseRating,
   parseRequirement,
   parseSkill,
-  parseTask,
   parseTeam,
 } from './validate.ts';
 
@@ -81,7 +81,7 @@ export function createApp(db: Db): Server {
             db.listTeams(),
             db.listConsultants(),
             db.listProjects(),
-            db.listTasks(),
+            db.listAllocations(),
             db.listSkills(),
             db.listRatings(),
             db.listRequirements(),
@@ -126,12 +126,14 @@ export function createApp(db: Db): Server {
         if (kind === 'projects') {
           const teams = new Map(db.listTeams().map((t) => [t.id, t.name]));
           const csv = toCsv(
-            ['id', 'projeto', 'equipa', 'estado', 'inicio', 'fim', 'budget_eur', 'atualizado_em'],
+            ['id', 'projeto', 'equipa', 'estado', 'prioridade', 'hc_necessario', 'inicio', 'fim', 'budget_eur', 'atualizado_em'],
             db.listProjects().map((p) => [
               p.id,
               p.name,
               teams.get(p.teamId) ?? '',
               p.status,
+              p.priority,
+              p.plannedHeadcount,
               p.startDate,
               p.endDate,
               centsToDecimal(p.budgetCents),
@@ -140,21 +142,16 @@ export function createApp(db: Db): Server {
           );
           return send(res, 200, csv, 'text/csv');
         }
-        if (kind === 'tasks') {
+        if (kind === 'allocations') {
           const projects = new Map(db.listProjects().map((p) => [p.id, p.name]));
           const people = new Map(db.listConsultants().map((c) => [c.id, c.code]));
           const csv = toCsv(
-            ['id', 'projeto', 'tarefa', 'responsavel', 'estado', 'prioridade', 'data_limite', 'estimativa_h', 'atualizado_em'],
-            db.listTasks().map((k) => [
-              k.id,
-              projects.get(k.projectId) ?? '',
-              k.title,
-              k.assigneeId === null ? null : (people.get(k.assigneeId) ?? ''),
-              k.status,
-              k.priority,
-              k.dueDate,
-              k.estimateHours,
-              k.updatedAt,
+            ['projeto', 'consultor', 'alocacao_pct', 'atualizado_em'],
+            db.listAllocations().map((a) => [
+              projects.get(a.projectId) ?? '',
+              people.get(a.consultantId) ?? '',
+              a.allocationPct,
+              a.updatedAt,
             ]),
           );
           return send(res, 200, csv, 'text/csv');
@@ -281,35 +278,23 @@ export function createApp(db: Db): Server {
         }
       }
 
-      if (resource === 'tasks') {
-        const guard = (e: unknown): never => {
-          if (isConstraint(e)) throw new HttpError(409, 'Projeto ou responsável inválido.');
-          throw e;
-        };
-        if (!idPart && method === 'GET') return send(res, 200, db.listTasks());
-        if (!idPart && method === 'POST') {
-          const p = parseTask(await readJson(req));
+      if (resource === 'allocations') {
+        if (!idPart && method === 'GET') return send(res, 200, db.listAllocations());
+        // PUT /api/allocations = criar ou atualizar (upsert)
+        if (!idPart && method === 'PUT') {
+          const p = parseAllocation(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           try {
-            return send(res, 201, db.getTask(db.createTask(p.value)));
+            db.upsertAllocation(p.value);
           } catch (e) {
-            return guard(e);
+            if (isConstraint(e)) throw new HttpError(409, 'Projeto ou consultor inválidos.');
+            throw e;
           }
+          return send(res, 200, db.getAllocation(p.value.projectId, p.value.consultantId));
         }
-        if (idPart && method === 'PUT') {
-          const id = parseId(idPart);
-          const p = parseTask(await readJson(req));
-          if (!p.ok) throw new HttpError(400, p.error);
-          try {
-            if (db.updateTask(id, p.value) === 0) throw new HttpError(404, 'Tarefa não encontrada.');
-          } catch (e) {
-            if (e instanceof HttpError) throw e;
-            return guard(e);
-          }
-          return send(res, 200, db.getTask(id));
-        }
-        if (idPart && method === 'DELETE') {
-          if (db.deleteTask(parseId(idPart)) === 0) throw new HttpError(404, 'Tarefa não encontrada.');
+        if (idPart && idPart2 && method === 'DELETE') {
+          if (db.deleteAllocation(parseId(idPart), parseId(idPart2)) === 0)
+            throw new HttpError(404, 'Alocação não encontrada.');
           return send(res, 200, { ok: true });
         }
       }

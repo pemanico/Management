@@ -1,6 +1,6 @@
 # Gestão da Unidade
 
-App local para registar equipas, budget, headcount, consultores/rates, projetos e tarefas, skill matrix, e exportar um resumo para o Claude.
+App local para registar equipas, budget, headcount, consultores/rates, projetos e alocações, skill matrix, e exportar um resumo para o Claude.
 
 ## Arrancar
 
@@ -23,7 +23,9 @@ Para usar uma base de dados de teste separada:
 - Montantes sempre em cêntimos (inteiros). Input em formato PT (`1.234,56`); `1234.56` é rejeitado por ser ambíguo.
 - Consultores identificados por código (C001), nunca por nome. A tabela código→pessoa fica fora da app.
 - API só escuta em localhost e rejeita Hosts não locais. Sem autenticação: é uma app de utilizador único.
-- Projetos e tarefas: apagar um projeto apaga as suas tarefas (com confirmação); apagar um consultor deixa as tarefas sem responsável. O filtro por projeto fica na URL (`#/tarefas?projeto=1`).
+- Projetos a alto nível: estado, prioridade, datas e HC de que o projeto precisa. As tarefas **não** estão na app: ficam com os gestores de projeto.
+- Alocações: consultor ↔ projeto com % (100 % = 1 FTE). Só contam projetos em aberto. Alertas: consultor sem alocação (bench), sobre-alocado (> 100 %) e projeto com menos FTE do que o HC necessário. Apagar um projeto apaga as suas alocações (com confirmação). O filtro por projeto fica na URL (`#/alocacoes?projeto=1`).
+- Bases de dados antigas migram sozinhas (colunas novas nos projetos). A tabela `tasks` de versões anteriores, se existir, fica por usar e não é apagada.
 - "Hoje" (atrasos, contratos a expirar, datas de avaliação) é o dia civil em Lisboa, não UTC (`shared/dates.ts`). Timestamps de auditoria ficam em ISO UTC.
 - O budget é, antes de mais, **headcount** (`Headcount orçamentado`). Os montantes em euros (budget, gasto, budget de projetos) são opcionais: vazio = 0 = "sem budget em dinheiro". Com tudo a 0, a app esconde as colunas e os alertas de dinheiro.
 - Moeda única (EUR). Sem dependências além de React/Vite/TS.

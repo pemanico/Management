@@ -1,7 +1,9 @@
 import { businessDate } from '../shared/dates.ts';
 import type {
   Alert,
+  Allocation,
   Consultant,
+  ConsultantAllocation,
   Project,
   ProjectSummary,
   Rating,
@@ -9,10 +11,8 @@ import type {
   Skill,
   SkillCoverage,
   Summary,
-  Task,
   Team,
   TeamSummary,
-  WorkloadItem,
 } from '../shared/types.ts';
 
 const DAY_MS = 86_400_000;
@@ -30,14 +30,14 @@ function pct(bp: number): string {
   return `${(bp / 100).toFixed(1).replace('.', ',')}%`;
 }
 
-const isOpenTask = (t: Task) => t.status !== 'done';
+const fte = (allocatedPct: number) => (allocatedPct / 100).toFixed(1).replace('.', ',');
 const isOpenProject = (p: Project) => p.status !== 'done';
 
 export function buildSummary(
   teams: Team[],
   consultants: Consultant[],
   projects: Project[],
-  tasks: Task[],
+  allocations: Allocation[],
   skills: Skill[],
   ratings: Rating[],
   requirements: Requirement[],
@@ -46,16 +46,23 @@ export function buildSummary(
   const today = businessDate(now);
   const limit = businessDate(new Date(now.getTime() + EXPIRY_DAYS * DAY_MS));
   const staleBefore = now.getTime() - STALE_DAYS * DAY_MS;
+  const oldBefore = businessDate(new Date(now.getTime() - ASSESSMENT_OLD_DAYS * DAY_MS));
   const alerts: Alert[] = [];
 
-  const oldBefore = businessDate(new Date(now.getTime() - ASSESSMENT_OLD_DAYS * DAY_MS));
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const skillById = new Map(skills.map((k) => [k.id, k]));
   const ratingKey = (c: number, k: number) => `${c}:${k}`;
   const ratingMap = new Map(ratings.map((r) => [ratingKey(r.consultantId, r.skillId), r]));
   const coverage: SkillCoverage[] = [];
-  const projectById = new Map(projects.map((p) => [p.id, p]));
-  const isOverdue = (t: Task) => isOpenTask(t) && t.dueDate !== null && t.dueDate < today;
+
+  // % alocada por consultor, só em projetos em aberto (um projeto concluído já não consome ninguém).
+  const openProjectIds = new Set(projects.filter(isOpenProject).map((p) => p.id));
+  const pctByConsultant = new Map<number, { pct: number; projects: number }>();
+  for (const a of allocations) {
+    if (!openProjectIds.has(a.projectId)) continue;
+    const cur = pctByConsultant.get(a.consultantId) ?? { pct: 0, projects: 0 };
+    pctByConsultant.set(a.consultantId, { pct: cur.pct + a.allocationPct, projects: cur.projects + 1 });
+  }
 
   const teamSummaries: TeamSummary[] = teams.map((t) => {
     const members = consultants.filter((c) => c.teamId === t.id && c.status === 'active');
@@ -74,41 +81,24 @@ export function buildSummary(
     );
     const gap = t.plannedHeadcount - members.length;
 
-    const teamProjects = projects.filter((p) => p.teamId === t.id);
-    const openProjects = teamProjects.filter(isOpenProject);
-    const teamTasks = tasks.filter((k) => projectById.get(k.projectId)?.teamId === t.id);
-    const openTasks = teamTasks.filter(isOpenTask);
-    const overdue = openTasks.filter(isOverdue);
-    const blocked = openTasks.filter((k) => k.status === 'blocked');
-    const unassigned = openTasks.filter((k) => k.assigneeId === null);
+    const openProjects = projects.filter((p) => p.teamId === t.id && isOpenProject(p));
     const projectBudget = openProjects.reduce((a, p) => a + p.budgetCents, 0);
+    const unallocated = members.filter((m) => (pctByConsultant.get(m.id)?.pct ?? 0) === 0);
+    const overallocated = members.filter((m) => (pctByConsultant.get(m.id)?.pct ?? 0) > 100);
 
     if (utilisationBp !== null && utilisationBp >= 9000)
-      alerts.push({
-        type: 'budget_over_90',
-        scope: t.name,
-        message: `Budget consumido: ${pct(utilisationBp)}.`,
-      });
-    if (gap > 0)
-      alerts.push({ type: 'vacancies', scope: t.name, message: `${gap} vaga(s) por preencher.` });
+      alerts.push({ type: 'budget_over_90', scope: t.name, message: `Budget consumido: ${pct(utilisationBp)}.` });
+    if (gap > 0) alerts.push({ type: 'vacancies', scope: t.name, message: `${gap} vaga(s) por preencher.` });
     if (gap < 0)
       alerts.push({
         type: 'over_headcount',
         scope: t.name,
-        message: `${-gap} pessoa(s) acima do headcount planeado.`,
+        message: `${-gap} pessoa(s) acima do headcount orçamentado.`,
       });
     for (const c of expiring)
-      alerts.push({
-        type: 'contract_expiring',
-        scope: `${t.name} / ${c.code}`,
-        message: `Contrato termina a ${c.contractEnd}.`,
-      });
+      alerts.push({ type: 'contract_expiring', scope: `${t.name} / ${c.code}`, message: `Contrato termina a ${c.contractEnd}.` });
     for (const c of members.filter((m) => m.billRateCentsPerDay === null))
-      alerts.push({
-        type: 'missing_bill_rate',
-        scope: `${t.name} / ${c.code}`,
-        message: 'Sem rate faturada registada.',
-      });
+      alerts.push({ type: 'missing_bill_rate', scope: `${t.name} / ${c.code}`, message: 'Sem rate faturada registada.' });
     if (Date.parse(t.updatedAt) < staleBefore)
       alerts.push({
         type: 'stale_data',
@@ -127,23 +117,13 @@ export function buildSummary(
         scope: t.name,
         message: 'A soma do budget dos projetos em aberto excede o budget da equipa.',
       });
-    if (overdue.length > 0)
+    for (const c of unallocated)
+      alerts.push({ type: 'consultant_unallocated', scope: `${t.name} / ${c.code}`, message: 'Ativo sem alocação a nenhum projeto.' });
+    for (const c of overallocated)
       alerts.push({
-        type: 'tasks_overdue',
-        scope: t.name,
-        message: `${overdue.length} tarefa(s) em atraso.`,
-      });
-    if (blocked.length > 0)
-      alerts.push({
-        type: 'tasks_blocked',
-        scope: t.name,
-        message: `${blocked.length} tarefa(s) bloqueada(s).`,
-      });
-    if (unassigned.length > 0)
-      alerts.push({
-        type: 'tasks_unassigned',
-        scope: t.name,
-        message: `${unassigned.length} tarefa(s) em aberto sem responsável.`,
+        type: 'consultant_overallocated',
+        scope: `${t.name} / ${c.code}`,
+        message: `Alocado a ${pctByConsultant.get(c.id)?.pct ?? 0}% (acima de 100%).`,
       });
 
     let skillGaps = 0;
@@ -154,7 +134,7 @@ export function buildSummary(
         .filter((r): r is Rating => r !== undefined && r.level >= rq.requiredLevel);
       const qualified = qualifiedRatings.length;
       const qualifiedValidated = qualifiedRatings.filter((r) => r.validated).length;
-      const gap = Math.max(0, rq.minPeople - qualified);
+      const skillGap = Math.max(0, rq.minPeople - qualified);
       coverage.push({
         teamName: t.name,
         skill: skillName,
@@ -162,14 +142,14 @@ export function buildSummary(
         minPeople: rq.minPeople,
         qualified,
         qualifiedValidated,
-        gap,
+        gap: skillGap,
       });
-      if (gap > 0) {
+      if (skillGap > 0) {
         skillGaps += 1;
         alerts.push({
           type: 'skill_gap',
           scope: `${t.name} / ${skillName}`,
-          message: `Faltam ${gap} pessoa(s) com nível ≥ ${rq.requiredLevel} (tem ${qualified}, mínimo ${rq.minPeople}).`,
+          message: `Faltam ${skillGap} pessoa(s) com nível ≥ ${rq.requiredLevel} (tem ${qualified}, mínimo ${rq.minPeople}).`,
         });
       } else if (qualifiedValidated < rq.minPeople) {
         alerts.push({
@@ -204,56 +184,54 @@ export function buildSummary(
       marginBp,
       contractsExpiring90d: expiring.length,
       openProjects: openProjects.length,
-      openTasks: openTasks.length,
-      overdueTasks: overdue.length,
-      blockedTasks: blocked.length,
+      unallocatedPeople: unallocated.length,
+      overallocatedPeople: overallocated.length,
       skillGaps,
     };
   });
 
   const projectSummaries: ProjectSummary[] = projects.map((p) => {
-    const ts = tasks.filter((k) => k.projectId === p.id);
-    const done = ts.filter((k) => k.status === 'done').length;
-    const open = ts.filter(isOpenTask);
+    const mine = allocations.filter((a) => a.projectId === p.id);
+    const allocatedPct = mine.reduce((a, x) => a + x.allocationPct, 0);
+    const gapPct = Math.max(0, p.plannedHeadcount * 100 - allocatedPct);
     const teamName = teamById.get(p.teamId)?.name ?? '—';
-    if (p.status === 'at_risk')
-      alerts.push({ type: 'project_at_risk', scope: `${teamName} / ${p.name}`, message: 'Projeto marcado em risco.' });
+    const scope = `${teamName} / ${p.name}`;
+    if (p.status === 'at_risk') alerts.push({ type: 'project_at_risk', scope, message: 'Projeto marcado em risco.' });
     if (isOpenProject(p) && p.endDate !== null && p.endDate < today)
       alerts.push({
         type: 'project_overdue',
-        scope: `${teamName} / ${p.name}`,
+        scope,
         message: `Data de fim (${p.endDate}) ultrapassada e projeto não concluído.`,
+      });
+    if (isOpenProject(p) && gapPct > 0)
+      alerts.push({
+        type: 'project_understaffed',
+        scope,
+        message: `Precisa de ${p.plannedHeadcount} HC e tem ${fte(allocatedPct)} FTE alocados.`,
       });
     return {
       projectId: p.id,
       name: p.name,
       teamName,
       status: p.status,
+      priority: p.priority,
       endDate: p.endDate,
       budgetCents: p.budgetCents,
-      totalTasks: ts.length,
-      doneTasks: done,
-      openTasks: open.length,
-      overdueTasks: open.filter(isOverdue).length,
-      blockedTasks: open.filter((k) => k.status === 'blocked').length,
-      progressBp: ts.length > 0 ? Math.round((done * 10_000) / ts.length) : null,
-      openEstimateHours: open.reduce((a, k) => a + (k.estimateHours ?? 0), 0),
+      plannedHeadcount: p.plannedHeadcount,
+      allocatedPeople: mine.length,
+      allocatedPct,
+      gapPct,
     };
   });
 
-  // Carga por consultor ativo (só descreve; não há limiares inventados).
-  const workload: WorkloadItem[] = consultants
+  const allocationSummaries: ConsultantAllocation[] = consultants
     .filter((c) => c.status === 'active')
-    .map((c) => {
-      const mine = tasks.filter((k) => k.assigneeId === c.id && isOpenTask(k));
-      return {
-        code: c.code,
-        teamName: teamById.get(c.teamId)?.name ?? '—',
-        openTasks: mine.length,
-        overdueTasks: mine.filter(isOverdue).length,
-        openEstimateHours: mine.reduce((a, k) => a + (k.estimateHours ?? 0), 0),
-      };
-    });
+    .map((c) => ({
+      code: c.code,
+      teamName: teamById.get(c.teamId)?.name ?? '—',
+      allocatedPct: pctByConsultant.get(c.id)?.pct ?? 0,
+      projectCount: pctByConsultant.get(c.id)?.projects ?? 0,
+    }));
 
   return {
     generatedAt: now.toISOString(),
@@ -264,11 +242,10 @@ export function buildSummary(
       plannedHeadcount: teams.reduce((a, t) => a + t.plannedHeadcount, 0),
       activeHeadcount: teamSummaries.reduce((a, t) => a + t.activeHeadcount, 0),
       openProjects: projects.filter(isOpenProject).length,
-      openTasks: tasks.filter(isOpenTask).length,
     },
     teams: teamSummaries,
     projects: projectSummaries,
-    workload,
+    allocations: allocationSummaries,
     skills: {
       skillCount: skills.length,
       ratingCount: ratings.length,

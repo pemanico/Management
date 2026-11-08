@@ -4,7 +4,6 @@ import {
   PROJECT_STATUSES,
   SENIORITIES,
   STATUSES,
-  TASK_STATUSES,
   type ConsultantInput,
   type Priority,
   type ProjectInput,
@@ -14,8 +13,7 @@ import {
   type SkillInput,
   type Seniority,
   type Status,
-  type TaskInput,
-  type TaskStatus,
+  type AllocationInput,
   type TeamInput,
 } from '../shared/types.ts';
 
@@ -118,6 +116,9 @@ export function parseProject(body: unknown): Result<ProjectInput> {
     return { ok: false, error: 'A data de fim não pode ser anterior à de início.' };
   const budgetCents = intIn(body.budgetCents, 0, MAX_CENTS);
   if (budgetCents === null) return { ok: false, error: 'Budget do projeto inválido.' };
+  if (!PRIORITIES.includes(body.priority as Priority)) return { ok: false, error: 'Prioridade inválida.' };
+  const plannedHeadcount = intIn(body.plannedHeadcount, 0, 10_000);
+  if (plannedHeadcount === null) return { ok: false, error: 'Headcount do projeto inválido.' };
   return {
     ok: true,
     value: {
@@ -127,44 +128,21 @@ export function parseProject(body: unknown): Result<ProjectInput> {
       startDate: start.value,
       endDate: end.value,
       budgetCents,
+      priority: body.priority as Priority,
+      plannedHeadcount,
     },
   };
 }
 
-export function parseTask(body: unknown): Result<TaskInput> {
+export function parseAllocation(body: unknown): Result<AllocationInput> {
   if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
   const projectId = intIn(body.projectId, 1, Number.MAX_SAFE_INTEGER);
+  const consultantId = intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER);
   if (projectId === null) return { ok: false, error: 'Projeto inválido.' };
-  const title = text(body.title, 140);
-  if (title === null) return { ok: false, error: 'Título inválido (1–140 caracteres).' };
-  let assigneeId: number | null = null;
-  if (body.assigneeId !== null && body.assigneeId !== undefined) {
-    assigneeId = intIn(body.assigneeId, 1, Number.MAX_SAFE_INTEGER);
-    if (assigneeId === null) return { ok: false, error: 'Responsável inválido.' };
-  }
-  if (!TASK_STATUSES.includes(body.status as TaskStatus))
-    return { ok: false, error: 'Estado da tarefa inválido.' };
-  if (!PRIORITIES.includes(body.priority as Priority))
-    return { ok: false, error: 'Prioridade inválida.' };
-  const due = optDate(body.dueDate);
-  if (!due.ok) return { ok: false, error: 'Data limite inválida.' };
-  let estimateHours: number | null = null;
-  if (body.estimateHours !== null && body.estimateHours !== undefined) {
-    estimateHours = intIn(body.estimateHours, 0, 100_000);
-    if (estimateHours === null) return { ok: false, error: 'Estimativa em horas inválida.' };
-  }
-  return {
-    ok: true,
-    value: {
-      projectId,
-      title,
-      assigneeId,
-      status: body.status as TaskStatus,
-      priority: body.priority as Priority,
-      dueDate: due.value,
-      estimateHours,
-    },
-  };
+  if (consultantId === null) return { ok: false, error: 'Consultor inválido.' };
+  const allocationPct = intIn(body.allocationPct, 1, 100);
+  if (allocationPct === null) return { ok: false, error: 'Alocação inválida (1–100 %).' };
+  return { ok: true, value: { projectId, consultantId, allocationPct } };
 }
 
 export function parseSkill(body: unknown): Result<SkillInput> {

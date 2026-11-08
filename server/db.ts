@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type {
+  Allocation,
+  AllocationInput,
   Consultant,
   Rating,
   RatingInput,
@@ -10,8 +12,6 @@ import type {
   ConsultantInput,
   Project,
   ProjectInput,
-  Task,
-  TaskInput,
   Team,
   TeamInput,
 } from '../shared/types.ts';
@@ -45,19 +45,17 @@ CREATE TABLE IF NOT EXISTS projects (
   start_date TEXT,
   end_date TEXT,
   budget_cents INTEGER NOT NULL CHECK (budget_cents >= 0),
+  priority TEXT NOT NULL DEFAULT 'medium',
+  planned_headcount INTEGER NOT NULL DEFAULT 0 CHECK (planned_headcount >= 0),
   updated_at TEXT NOT NULL,
   UNIQUE (team_id, name)
 );
-CREATE TABLE IF NOT EXISTS tasks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE IF NOT EXISTS allocations (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  assignee_id INTEGER REFERENCES consultants(id) ON DELETE SET NULL,
-  status TEXT NOT NULL,
-  priority TEXT NOT NULL,
-  due_date TEXT,
-  estimate_hours INTEGER CHECK (estimate_hours IS NULL OR estimate_hours >= 0),
-  updated_at TEXT NOT NULL
+  consultant_id INTEGER NOT NULL REFERENCES consultants(id) ON DELETE CASCADE,
+  allocation_pct INTEGER NOT NULL CHECK (allocation_pct BETWEEN 1 AND 100),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (project_id, consultant_id)
 );
 CREATE TABLE IF NOT EXISTS skills (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,10 +95,11 @@ type RatingRow = Omit<Rating, 'validated'> & { validated: number };
 const toRating = (r: RatingRow): Rating => ({ ...r, validated: r.validated === 1 });
 
 const PROJECT_SELECT = `SELECT id, name, team_id AS teamId, status, start_date AS startDate,
-  end_date AS endDate, budget_cents AS budgetCents, updated_at AS updatedAt FROM projects`;
+  end_date AS endDate, budget_cents AS budgetCents, priority,
+  planned_headcount AS plannedHeadcount, updated_at AS updatedAt FROM projects`;
 
-const TASK_SELECT = `SELECT id, project_id AS projectId, title, assignee_id AS assigneeId, status,
-  priority, due_date AS dueDate, estimate_hours AS estimateHours, updated_at AS updatedAt FROM tasks`;
+const ALLOCATION_SELECT = `SELECT project_id AS projectId, consultant_id AS consultantId,
+  allocation_pct AS allocationPct, updated_at AS updatedAt FROM allocations`;
 
 const TEAM_SELECT = `SELECT id, name, budget_cents AS budgetCents, actual_cents AS actualCents,
   planned_headcount AS plannedHeadcount, updated_at AS updatedAt FROM teams`;
@@ -113,6 +112,12 @@ export function openDb(path: string) {
   const db = new DatabaseSync(path);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  // Migração: bases criadas antes de existirem prioridade e HC por projeto.
+  const projectCols = (db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).map((c) => c.name);
+  if (!projectCols.includes('priority'))
+    db.exec("ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
+  if (!projectCols.includes('planned_headcount'))
+    db.exec('ALTER TABLE projects ADD COLUMN planned_headcount INTEGER NOT NULL DEFAULT 0');
   const now = () => new Date().toISOString();
 
   return {
@@ -190,10 +195,10 @@ export function openDb(path: string) {
     createProject: (p: ProjectInput) => {
       const r = db
         .prepare(
-          `INSERT INTO projects (name, team_id, status, start_date, end_date, budget_cents, updated_at)
-           VALUES (?,?,?,?,?,?,?)`,
+          `INSERT INTO projects (name, team_id, status, start_date, end_date, budget_cents, priority,
+           planned_headcount, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
         )
-        .run(p.name, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, now());
+        .run(p.name, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, p.priority, p.plannedHeadcount, now());
       return Number(r.lastInsertRowid);
     },
     updateProject: (id: number, p: ProjectInput) =>
@@ -201,35 +206,32 @@ export function openDb(path: string) {
         db
           .prepare(
             `UPDATE projects SET name=?, team_id=?, status=?, start_date=?, end_date=?, budget_cents=?,
-             updated_at=? WHERE id=?`,
+             priority=?, planned_headcount=?, updated_at=? WHERE id=?`,
           )
-          .run(p.name, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, now(), id).changes,
+          .run(p.name, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, p.priority, p.plannedHeadcount, now(), id)
+          .changes,
       ),
     deleteProject: (id: number) =>
       Number(db.prepare('DELETE FROM projects WHERE id=?').run(id).changes),
 
-    listTasks: () => db.prepare(`${TASK_SELECT} ORDER BY id`).all() as Task[],
-    getTask: (id: number) => db.prepare(`${TASK_SELECT} WHERE id = ?`).get(id) as Task | undefined,
-    createTask: (t: TaskInput) => {
-      const r = db
-        .prepare(
-          `INSERT INTO tasks (project_id, title, assignee_id, status, priority, due_date, estimate_hours, updated_at)
-           VALUES (?,?,?,?,?,?,?,?)`,
-        )
-        .run(t.projectId, t.title, t.assigneeId, t.status, t.priority, t.dueDate, t.estimateHours, now());
-      return Number(r.lastInsertRowid);
+    listAllocations: () =>
+      db.prepare(`${ALLOCATION_SELECT} ORDER BY project_id, consultant_id`).all() as Allocation[],
+    getAllocation: (projectId: number, consultantId: number) =>
+      db
+        .prepare(`${ALLOCATION_SELECT} WHERE project_id = ? AND consultant_id = ?`)
+        .get(projectId, consultantId) as Allocation | undefined,
+    upsertAllocation: (a: AllocationInput) => {
+      db.prepare(
+        `INSERT INTO allocations (project_id, consultant_id, allocation_pct, updated_at) VALUES (?,?,?,?)
+         ON CONFLICT (project_id, consultant_id) DO UPDATE SET allocation_pct=excluded.allocation_pct,
+           updated_at=excluded.updated_at`,
+      ).run(a.projectId, a.consultantId, a.allocationPct, now());
     },
-    updateTask: (id: number, t: TaskInput) =>
+    deleteAllocation: (projectId: number, consultantId: number) =>
       Number(
-        db
-          .prepare(
-            `UPDATE tasks SET project_id=?, title=?, assignee_id=?, status=?, priority=?, due_date=?,
-             estimate_hours=?, updated_at=? WHERE id=?`,
-          )
-          .run(t.projectId, t.title, t.assigneeId, t.status, t.priority, t.dueDate, t.estimateHours, now(), id)
+        db.prepare('DELETE FROM allocations WHERE project_id=? AND consultant_id=?').run(projectId, consultantId)
           .changes,
       ),
-    deleteTask: (id: number) => Number(db.prepare('DELETE FROM tasks WHERE id=?').run(id).changes),
 
     listSkills: () => db.prepare(`${SKILL_SELECT} ORDER BY name`).all() as Skill[],
     getSkill: (id: number) => db.prepare(`${SKILL_SELECT} WHERE id = ?`).get(id) as Skill | undefined,

@@ -84,43 +84,6 @@ test('CSV injection é neutralizado', () => {
   assert.equal(csvCell('normal'), 'normal');
 });
 
-test('projetos e tarefas: alertas, carga e cascade', async () => {
-  const { call, close } = await setup();
-  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 50_000_00, actualCents: 0, plannedHeadcount: 1 })).data as { id: number };
-  const cons = (await call('/api/consultants', 'POST', {
-    code: 'C1', teamId: team.id, profile: 'x', seniority: 'pleno',
-    costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
-  })).data as { id: number };
-
-  // fim antes de início é rejeitado
-  assert.equal((await call('/api/projects', 'POST', {
-    name: 'P', teamId: team.id, status: 'active', startDate: '2026-05-01', endDate: '2026-04-01', budgetCents: 0,
-  })).status, 400);
-
-  const proj = (await call('/api/projects', 'POST', {
-    name: 'Migração', teamId: team.id, status: 'at_risk', startDate: '2026-01-01', endDate: '2026-02-01', budgetCents: 60_000_00,
-  })).data as { id: number };
-  const base = { projectId: proj.id, priority: 'high', estimateHours: 8 };
-  await call('/api/tasks', 'POST', { ...base, title: 'A', assigneeId: cons.id, status: 'doing', dueDate: '2026-01-10' });
-  await call('/api/tasks', 'POST', { ...base, title: 'B', assigneeId: null, status: 'blocked', dueDate: null });
-  await call('/api/tasks', 'POST', { ...base, title: 'C', assigneeId: cons.id, status: 'done', dueDate: null });
-
-  const s = (await call('/api/summary')).data as any;
-  const types = s.alerts.map((a: any) => a.type);
-  for (const t of ['project_at_risk', 'project_overdue', 'projects_exceed_budget', 'tasks_overdue', 'tasks_blocked', 'tasks_unassigned'])
-    assert.ok(types.includes(t), t);
-  assert.equal(s.projects[0].progressBp, 3333);
-  assert.equal(s.projects[0].openEstimateHours, 16);
-  assert.deepEqual(s.workload[0], { code: 'C1', teamName: 'T', openTasks: 1, overdueTasks: 1, openEstimateHours: 8 });
-
-  // equipa com projetos não se apaga; apagar projeto leva as tarefas
-  assert.equal((await call(`/api/teams/${team.id}`, 'DELETE')).status, 409);
-  assert.equal((await call(`/api/projects/${proj.id}`, 'DELETE')).status, 200);
-  assert.deepEqual((await call('/api/tasks')).data, []);
-  // apagar consultor desassocia (não apaga) tarefas
-  close();
-});
-
 test('skills matrix: gaps, validação e cobertura', async () => {
   const { call, close } = await setup();
   const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 1, actualCents: 0, plannedHeadcount: 2 })).data as { id: number };
@@ -173,6 +136,7 @@ test('unidade só com budget em headcount: sem alertas de dinheiro', async () =>
   const team = (await call('/api/teams', 'POST', { name: 'H', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
   await call('/api/projects', 'POST', {
     name: 'P', teamId: team.id, status: 'active', startDate: null, endDate: null, budgetCents: 80_000_00,
+    priority: 'high', plannedHeadcount: 0,
   });
   const s = (await call('/api/summary')).data as any;
   const types = s.alerts.map((a: any) => a.type);
@@ -181,4 +145,78 @@ test('unidade só com budget em headcount: sem alertas de dinheiro', async () =>
   assert.ok(types.includes('vacancies')); // o budget em headcount continua a alertar
   assert.equal(s.teams[0].utilisationBp, null);
   close();
+});
+
+test('projetos e alocações: HC, sobre-alocação, bench e cascade', async () => {
+  const { call, close } = await setup();
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
+  const mk = async (code: string) =>
+    ((await call('/api/consultants', 'POST', {
+      code, teamId: team.id, profile: 'x', seniority: 'pleno',
+      costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
+    })).data as { id: number }).id;
+  const c1 = await mk('C1');
+  const c2 = await mk('C2');
+  await mk('C3'); // fica no bench
+
+  // prioridade e HC inválidos são rejeitados
+  const base = { name: 'Migração', teamId: team.id, status: 'at_risk', startDate: '2026-01-01', endDate: '2026-02-01', budgetCents: 0 };
+  assert.equal((await call('/api/projects', 'POST', { ...base, priority: 'urgente', plannedHeadcount: 2 })).status, 400);
+  assert.equal((await call('/api/projects', 'POST', { ...base, priority: 'high', plannedHeadcount: -1 })).status, 400);
+  const pa = (await call('/api/projects', 'POST', { ...base, priority: 'high', plannedHeadcount: 2 })).data as { id: number };
+  const pb = (await call('/api/projects', 'POST', { ...base, name: 'Outro', status: 'active', endDate: null, priority: 'low', plannedHeadcount: 0 })).data as { id: number };
+
+  // alocação inválida
+  assert.equal((await call('/api/allocations', 'PUT', { projectId: pa.id, consultantId: c1, allocationPct: 0 })).status, 400);
+  assert.equal((await call('/api/allocations', 'PUT', { projectId: pa.id, consultantId: c1, allocationPct: 101 })).status, 400);
+  assert.equal((await call('/api/allocations', 'PUT', { projectId: 999, consultantId: c1, allocationPct: 50 })).status, 409);
+
+  await call('/api/allocations', 'PUT', { projectId: pa.id, consultantId: c1, allocationPct: 80 });
+  await call('/api/allocations', 'PUT', { projectId: pb.id, consultantId: c1, allocationPct: 50 }); // c1 = 130%
+  await call('/api/allocations', 'PUT', { projectId: pa.id, consultantId: c2, allocationPct: 40 });
+  await call('/api/allocations', 'PUT', { projectId: pa.id, consultantId: c2, allocationPct: 50 }); // upsert, não duplica
+  assert.equal(((await call('/api/allocations')).data as any[]).length, 3);
+
+  const s = (await call('/api/summary')).data as any;
+  const types = s.alerts.map((a: any) => a.type);
+  for (const t of ['project_at_risk', 'project_overdue', 'project_understaffed', 'consultant_overallocated', 'consultant_unallocated'])
+    assert.ok(types.includes(t), t);
+  const proj = s.projects.find((p: any) => p.projectId === pa.id);
+  assert.equal(proj.allocatedPct, 130); // 80 + 50
+  assert.equal(proj.gapPct, 70); // precisa 200, tem 130
+  assert.equal(proj.allocatedPeople, 2);
+  assert.equal(s.allocations.find((a: any) => a.code === 'C1').allocatedPct, 130);
+  assert.equal(s.teams[0].overallocatedPeople, 1);
+  assert.equal(s.teams[0].unallocatedPeople, 1);
+
+  // projeto concluído deixa de consumir a alocação
+  await call(`/api/projects/${pb.id}`, 'PUT', { ...base, name: 'Outro', status: 'done', endDate: null, priority: 'low', plannedHeadcount: 0 });
+  const s2 = (await call('/api/summary')).data as any;
+  assert.equal(s2.allocations.find((a: any) => a.code === 'C1').allocatedPct, 80);
+
+  // apagar projeto apaga as alocações
+  await call(`/api/projects/${pa.id}`, 'DELETE');
+  assert.equal(((await call('/api/allocations')).data as any[]).length, 1);
+  close();
+});
+
+test('migração: base antiga sem prioridade/HC nos projetos continua a abrir', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const path = join(mkdtempSync(join(tmpdir(), 'um-')), 'old.sqlite');
+  const old = new DatabaseSync(path);
+  old.exec(`CREATE TABLE teams (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, budget_cents INTEGER NOT NULL,
+    actual_cents INTEGER NOT NULL, planned_headcount INTEGER NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, team_id INTEGER NOT NULL REFERENCES teams(id),
+    status TEXT NOT NULL, start_date TEXT, end_date TEXT, budget_cents INTEGER NOT NULL, updated_at TEXT NOT NULL, UNIQUE (team_id, name));
+    INSERT INTO teams VALUES (1,'A',0,0,2,'2026-01-01T00:00:00Z');
+    INSERT INTO projects VALUES (1,'P',1,'active',NULL,NULL,0,'2026-01-01T00:00:00Z');`);
+  old.close();
+  const db = openDb(path);
+  const p = db.listProjects()[0]!;
+  assert.equal(p.priority, 'medium');
+  assert.equal(p.plannedHeadcount, 0);
+  db.close();
 });

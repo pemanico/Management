@@ -1,12 +1,21 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { PROJECT_STATUSES, type Project, type ProjectStatus, type Task, type Team } from '../../shared/types.ts';
+import { PRIORITIES, PROJECT_STATUSES, type Allocation, type Priority, type Project, type ProjectStatus, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatOptionalCents, parseOptionalEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
 import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 
-type Props = { teams: Team[]; projects: Project[]; tasks: Task[]; onChanged: () => Promise<void> };
-type Form = { name: string; teamId: string; status: ProjectStatus; startDate: string; endDate: string; budget: string };
+type Props = { teams: Team[]; projects: Project[]; allocations: Allocation[]; onChanged: () => Promise<void> };
+type Form = {
+  name: string;
+  teamId: string;
+  status: ProjectStatus;
+  priority: Priority;
+  plannedHeadcount: string;
+  startDate: string;
+  endDate: string;
+  budget: string;
+};
 type Errors = Partial<Record<keyof Form, string>>;
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -17,9 +26,20 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   done: 'Concluído',
 };
 
-const EMPTY: Form = { name: '', teamId: '', status: 'planned', startDate: '', endDate: '', budget: '' };
+export const PRIORITY_LABEL: Record<Priority, string> = { low: 'Baixa', medium: 'Média', high: 'Alta' };
 
-export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
+const EMPTY: Form = {
+  name: '',
+  teamId: '',
+  status: 'planned',
+  priority: 'medium',
+  plannedHeadcount: '0',
+  startDate: '',
+  endDate: '',
+  budget: '',
+};
+
+export function ProjectsView({ teams, projects, allocations, onChanged }: Props) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [editingId, setEditingId] = useState<number | undefined>();
   const [errors, setErrors] = useState<Errors>({});
@@ -27,8 +47,11 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
   const [saving, setSaving] = useState(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const teamName = new Map(teams.map((t) => [t.id, t.name]));
-  const taskCount = new Map<number, number>();
-  for (const t of tasks) taskCount.set(t.projectId, (taskCount.get(t.projectId) ?? 0) + 1);
+  const allocated = new Map<number, { people: number; pct: number }>();
+  for (const a of allocations) {
+    const cur = allocated.get(a.projectId) ?? { people: 0, pct: 0 };
+    allocated.set(a.projectId, { people: cur.people + 1, pct: cur.pct + a.allocationPct });
+  }
 
   const set = (k: keyof Form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -51,6 +74,8 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
     const budgetCents = parseOptionalEuroToCents(form.budget);
     if (form.name.trim() === '') next.name = 'Indica o nome do projeto.';
     if (form.teamId === '') next.teamId = 'Escolhe uma equipa.';
+    const planned = Number(form.plannedHeadcount);
+    if (!Number.isInteger(planned) || planned < 0) next.plannedHeadcount = 'Indica um número inteiro ≥ 0.';
     if (budgetCents === null) next.budget = 'Formato inválido. Exemplo: 25.000,00';
     if (form.startDate !== '' && form.endDate !== '' && form.endDate < form.startDate)
       next.endDate = 'O fim não pode ser anterior ao início.';
@@ -65,6 +90,8 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
           name: form.name.trim(),
           teamId: Number(form.teamId),
           status: form.status,
+          priority: form.priority,
+          plannedHeadcount: planned,
           startDate: form.startDate === '' ? null : form.startDate,
           endDate: form.endDate === '' ? null : form.endDate,
           budgetCents,
@@ -88,6 +115,8 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
       name: p.name,
       teamId: String(p.teamId),
       status: p.status,
+      priority: p.priority,
+      plannedHeadcount: String(p.plannedHeadcount),
       startDate: p.startDate ?? '',
       endDate: p.endDate ?? '',
       budget: p.budgetCents === 0 ? '' : centsToInput(p.budgetCents),
@@ -127,6 +156,18 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
               </select>
             )}
           </Field>
+          <Field label="Prioridade">
+            {(c) => (
+              <select {...c} name="priority" value={form.priority} onChange={set('priority')}>
+                {PRIORITIES.map((s) => (
+                  <option key={s} value={s}>{PRIORITY_LABEL[s]}</option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <Field label="HC de que o projeto precisa" hint="Nº de pessoas a tempo inteiro. 0 = não definido" error={errors.plannedHeadcount}>
+            {(c) => <input {...c} name="plannedHeadcount" type="number" inputMode="numeric" min={0} step={1} value={form.plannedHeadcount} onChange={set('plannedHeadcount')} />}
+          </Field>
           <Field label="Budget do projeto (EUR)" hint="Opcional" error={errors.budget}>
             {(c) => <input {...c} name="budget" type="text" inputMode="decimal" autoComplete="off" value={form.budget} onChange={set('budget')} />}
           </Field>
@@ -156,10 +197,11 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
                 <th scope="col">Projeto</th>
                 <th scope="col">Equipa</th>
                 <th scope="col">Estado</th>
-                <th scope="col">Início</th>
+                <th scope="col">Prioridade</th>
                 <th scope="col">Fim previsto</th>
-                <th scope="col" className="num">Budget</th>
-                <th scope="col" className="num">Tarefas</th>
+                <th scope="col" className="num">HC necessário</th>
+                <th scope="col" className="num">Alocados</th>
+                <th scope="col" className="num">Budget (EUR)</th>
                 <th scope="col"><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
@@ -172,18 +214,21 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
                     {PROJECT_STATUS_LABEL[p.status]}
                     {p.status === 'at_risk' && <span className="flag"> ▲</span>}
                   </td>
-                  <td>{p.startDate ?? '—'}</td>
+                  <td>{PRIORITY_LABEL[p.priority]}</td>
                   <td>{p.endDate ?? '—'}</td>
-                  <td className="num">{formatOptionalCents(p.budgetCents)}</td>
+                  <td className="num">{p.plannedHeadcount === 0 ? '—' : p.plannedHeadcount}</td>
                   <td className="num">
-                    <a href={`#/tarefas?projeto=${p.id}`}>{taskCount.get(p.id) ?? 0}</a>
+                    <a href={`#/alocacoes?projeto=${p.id}`}>
+                      {allocated.get(p.id)?.people ?? 0} · {((allocated.get(p.id)?.pct ?? 0) / 100).toFixed(1).replace('.', ',')} FTE
+                    </a>
                   </td>
+                  <td className="num">{formatOptionalCents(p.budgetCents)}</td>
                   <td className="row-actions">
                     <button type="button" className="link" onClick={() => edit(p)} aria-label={`Editar ${p.name}`}>
                       Editar
                     </button>
                     <ConfirmDelete
-                      label={`${p.name} e as suas ${taskCount.get(p.id) ?? 0} tarefa(s)`}
+                      label={`${p.name} e as suas ${allocated.get(p.id)?.people ?? 0} alocação(ões)`}
                       onConfirm={async () => {
                         try {
                           await api.deleteProject(p.id);

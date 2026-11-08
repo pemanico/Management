@@ -10,9 +10,6 @@ export type Status = (typeof STATUSES)[number];
 export const PROJECT_STATUSES = ['planned', 'active', 'at_risk', 'on_hold', 'done'] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-export const TASK_STATUSES = ['todo', 'doing', 'blocked', 'done'] as const;
-export type TaskStatus = (typeof TASK_STATUSES)[number];
-
 export const PRIORITIES = ['low', 'medium', 'high'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
@@ -44,22 +41,20 @@ export type ProjectInput = {
   status: ProjectStatus;
   startDate: string | null; // YYYY-MM-DD
   endDate: string | null; // YYYY-MM-DD
-  budgetCents: number;
+  budgetCents: number; // opcional: 0 = sem budget em dinheiro
+  priority: Priority;
+  plannedHeadcount: number; // HC de que o projeto precisa (0 = não definido)
 };
 
 export type Project = ProjectInput & { id: number; updatedAt: string };
 
-export type TaskInput = {
+export type AllocationInput = {
   projectId: number;
-  title: string;
-  assigneeId: number | null; // consultor
-  status: TaskStatus;
-  priority: Priority;
-  dueDate: string | null; // YYYY-MM-DD
-  estimateHours: number | null;
+  consultantId: number;
+  allocationPct: number; // 1–100: % do tempo do consultor neste projeto
 };
 
-export type Task = TaskInput & { id: number; updatedAt: string };
+export type Allocation = AllocationInput & { updatedAt: string };
 
 export const SKILL_LEVELS = [0, 1, 2, 3, 4] as const;
 export const SKILL_LEVEL_LABEL = [
@@ -102,9 +97,9 @@ export type Alert = {
     | 'project_at_risk'
     | 'project_overdue'
     | 'projects_exceed_budget'
-    | 'tasks_overdue'
-    | 'tasks_blocked'
-    | 'tasks_unassigned'
+    | 'project_understaffed'
+    | 'consultant_overallocated'
+    | 'consultant_unallocated'
     | 'skill_gap'
     | 'skill_unvalidated'
     | 'skill_assessment_old';
@@ -127,9 +122,8 @@ export type TeamSummary = {
   marginBp: number | null;
   contractsExpiring90d: number;
   openProjects: number;
-  openTasks: number;
-  overdueTasks: number;
-  blockedTasks: number;
+  unallocatedPeople: number; // ativos com 0% alocado
+  overallocatedPeople: number; // ativos com mais de 100% alocado
   skillGaps: number;
 };
 
@@ -138,23 +132,20 @@ export type ProjectSummary = {
   name: string;
   teamName: string;
   status: ProjectStatus;
+  priority: Priority;
   endDate: string | null;
   budgetCents: number;
-  totalTasks: number;
-  doneTasks: number;
-  openTasks: number;
-  overdueTasks: number;
-  blockedTasks: number;
-  progressBp: number | null; // tarefas concluídas / total
-  openEstimateHours: number;
+  plannedHeadcount: number;
+  allocatedPeople: number;
+  allocatedPct: number; // soma das alocações (100 = 1 FTE)
+  gapPct: number; // max(0, plannedHeadcount*100 - allocatedPct)
 };
 
-export type WorkloadItem = {
+export type ConsultantAllocation = {
   code: string;
   teamName: string;
-  openTasks: number;
-  overdueTasks: number;
-  openEstimateHours: number;
+  allocatedPct: number;
+  projectCount: number;
 };
 
 export type SkillCoverage = {
@@ -176,11 +167,10 @@ export type Summary = {
     plannedHeadcount: number;
     activeHeadcount: number;
     openProjects: number;
-    openTasks: number;
   };
   teams: TeamSummary[];
   projects: ProjectSummary[];
-  workload: WorkloadItem[];
+  allocations: ConsultantAllocation[];
   skills: {
     skillCount: number;
     ratingCount: number;

@@ -1,4 +1,6 @@
 import type {
+  Allocation,
+  AllocationInput,
   Consultant,
   ConsultantInput,
   Project,
@@ -10,8 +12,6 @@ import type {
   Skill,
   SkillInput,
   Summary,
-  Task,
-  TaskInput,
   Team,
   TeamInput,
 } from '../shared/types.ts';
@@ -54,15 +54,15 @@ export const api = {
       : request<Consultant>(`/consultants/${id}`, 'PUT', input),
   deleteConsultant: (id: number) => request<{ ok: true }>(`/consultants/${id}`, 'DELETE'),
   projects: () => request<Project[]>('/projects'),
-  tasks: () => request<Task[]>('/tasks'),
+  allocations: () => request<Allocation[]>('/allocations'),
   saveProject: (input: ProjectInput, id?: number) =>
     id === undefined
       ? request<Project>('/projects', 'POST', input)
       : request<Project>(`/projects/${id}`, 'PUT', input),
   deleteProject: (id: number) => request<{ ok: true }>(`/projects/${id}`, 'DELETE'),
-  saveTask: (input: TaskInput, id?: number) =>
-    id === undefined ? request<Task>('/tasks', 'POST', input) : request<Task>(`/tasks/${id}`, 'PUT', input),
-  deleteTask: (id: number) => request<{ ok: true }>(`/tasks/${id}`, 'DELETE'),
+  saveAllocation: (input: AllocationInput) => request<Allocation>('/allocations', 'PUT', input),
+  deleteAllocation: (projectId: number, consultantId: number) =>
+    request<{ ok: true }>(`/allocations/${projectId}/${consultantId}`, 'DELETE'),
   skills: () => request<Skill[]>('/skills'),
   ratings: () => request<Rating[]>('/ratings'),
   requirements: () => request<Requirement[]>('/requirements'),

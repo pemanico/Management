@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Consultant, Project, Rating, Requirement, Skill, Summary, Task, Team } from '../shared/types.ts';
+import type { Allocation, Consultant, Project, Rating, Requirement, Skill, Summary, Team } from '../shared/types.ts';
 import { api, ApiError } from './api.ts';
 import { SummaryView } from './views/SummaryView.tsx';
 import { TeamsView } from './views/TeamsView.tsx';
 import { ConsultantsView } from './views/ConsultantsView.tsx';
 import { ExportView } from './views/ExportView.tsx';
 import { ProjectsView } from './views/ProjectsView.tsx';
-import { TasksView } from './views/TasksView.tsx';
+import { AllocationsView } from './views/AllocationsView.tsx';
 import { SkillsView } from './views/SkillsView.tsx';
 import { MatrixView } from './views/MatrixView.tsx';
 
@@ -15,7 +15,7 @@ const ROUTES = [
   { id: 'equipas', label: 'Equipas' },
   { id: 'consultores', label: 'Consultores' },
   { id: 'projetos', label: 'Projetos' },
-  { id: 'tarefas', label: 'Tarefas' },
+  { id: 'alocacoes', label: 'Alocações' },
   { id: 'competencias', label: 'Competências' },
   { id: 'matriz', label: 'Skill matrix' },
   { id: 'exportar', label: 'Exportar' },
@@ -32,7 +32,7 @@ type Data = {
   teams: Team[];
   consultants: Consultant[];
   projects: Project[];
-  tasks: Task[];
+  allocations: Allocation[];
   skills: Skill[];
   ratings: Rating[];
   requirements: Requirement[];
@@ -54,19 +54,19 @@ export function App() {
   // Os três pedidos são independentes: arrancam em paralelo (sem waterfall).
   const load = useCallback(async () => {
     try {
-      const [summary, teams, consultants, projects, tasks, skills, ratings, requirements] = await Promise.all([
+      const [summary, teams, consultants, projects, allocations, skills, ratings, requirements] = await Promise.all([
         api.summary(),
         api.teams(),
         api.consultants(),
         api.projects(),
-        api.tasks(),
+        api.allocations(),
         api.skills(),
         api.ratings(),
         api.requirements(),
       ]);
       setState({
         status: 'ready',
-        data: { summary, teams, consultants, projects, tasks, skills, ratings, requirements },
+        data: { summary, teams, consultants, projects, allocations, skills, ratings, requirements },
       });
     } catch (err) {
       setState({ status: 'error', message: err instanceof ApiError ? err.message : 'Ocorreu um erro.' });
@@ -124,18 +124,19 @@ export function App() {
               <ProjectsView
                 teams={state.data.teams}
                 projects={state.data.projects}
-                tasks={state.data.tasks}
+                allocations={state.data.allocations}
                 onChanged={saved}
               />
             )}
-            {route === 'tarefas' && (
-              <TasksView
+            {route === 'alocacoes' && (
+              <AllocationsView
+                teams={state.data.teams}
                 projects={state.data.projects}
                 consultants={state.data.consultants}
-                tasks={state.data.tasks}
+                allocations={state.data.allocations}
                 projectFilter={params.get('projeto') ?? ''}
                 onFilter={(id) => {
-                  window.location.hash = id === '' ? '#/tarefas' : `#/tarefas?projeto=${id}`;
+                  window.location.hash = id === '' ? '#/alocacoes' : `#/alocacoes?projeto=${id}`;
                 }}
                 onChanged={saved}
               />

@@ -1,6 +1,6 @@
 import type { Summary } from '../../shared/types.ts';
 import { formatBp, formatCents } from '../money.ts';
-import { PROJECT_STATUS_LABEL } from './ProjectsView.tsx';
+import { PRIORITY_LABEL, PROJECT_STATUS_LABEL } from './ProjectsView.tsx';
 
 const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   budget_over_90: 'Budget',
@@ -12,16 +12,16 @@ const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   project_at_risk: 'Projeto em risco',
   project_overdue: 'Projeto em atraso',
   projects_exceed_budget: 'Budget de projetos',
-  tasks_overdue: 'Tarefas em atraso',
-  tasks_blocked: 'Tarefas bloqueadas',
-  tasks_unassigned: 'Sem responsável',
+  project_understaffed: 'Projeto sub-staffed',
+  consultant_overallocated: 'Sobre-alocação',
+  consultant_unallocated: 'Sem alocação',
   skill_gap: 'Gap de competência',
   skill_unvalidated: 'Competência não validada',
   skill_assessment_old: 'Avaliações antigas',
 };
 
 export function SummaryView({ summary }: { summary: Summary }) {
-  const { totals, teams, alerts, projects, workload, skills } = summary;
+  const { totals, teams, alerts, projects, allocations, skills } = summary;
   const hasMoney = totals.budgetCents > 0; // budget em euros é opcional (muitas unidades só têm budget em headcount)
   return (
     <section aria-labelledby="sum-title">
@@ -32,7 +32,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
         {hasMoney && <div className="card"><dt>Budget total</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
         {hasMoney && <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
         <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
-        <div className="card"><dt>Projetos / tarefas em aberto</dt><dd>{totals.openProjects} / {totals.openTasks}</dd></div>
+        <div className="card"><dt>Projetos em aberto</dt><dd>{totals.openProjects}</dd></div>
         <div className="card"><dt>Alertas</dt><dd>{alerts.length}</dd></div>
       </dl>
 
@@ -67,9 +67,9 @@ export function SummaryView({ summary }: { summary: Summary }) {
                 <th scope="col" className="num">Rate faturada média</th>
                 <th scope="col" className="num">Margem</th>
                 <th scope="col" className="num">Contratos a expirar (90d)</th>
-                <th scope="col" className="num">Tarefas abertas</th>
-                <th scope="col" className="num">Em atraso</th>
-                <th scope="col" className="num">Bloqueadas</th>
+                <th scope="col" className="num">Projetos abertos</th>
+                <th scope="col" className="num">Sem alocação</th>
+                <th scope="col" className="num">Sobre-alocados</th>
               </tr>
             </thead>
             <tbody>
@@ -94,9 +94,9 @@ export function SummaryView({ summary }: { summary: Summary }) {
                   <td className="num">{formatCents(t.avgBillRateCentsPerDay)}</td>
                   <td className="num">{formatBp(t.marginBp)}</td>
                   <td className="num">{t.contractsExpiring90d}</td>
-                  <td className="num">{t.openTasks}</td>
-                  <td className="num">{t.overdueTasks}</td>
-                  <td className="num">{t.blockedTasks}</td>
+                  <td className="num">{t.openProjects}</td>
+                  <td className="num">{t.unallocatedPeople}</td>
+                  <td className="num">{t.overallocatedPeople}</td>
                 </tr>
               ))}
             </tbody>
@@ -115,12 +115,11 @@ export function SummaryView({ summary }: { summary: Summary }) {
                 <th scope="col">Projeto</th>
                 <th scope="col">Equipa</th>
                 <th scope="col">Estado</th>
+                <th scope="col">Prioridade</th>
                 <th scope="col">Fim previsto</th>
-                <th scope="col" className="num">Progresso</th>
-                <th scope="col" className="num">Tarefas abertas</th>
-                <th scope="col" className="num">Em atraso</th>
-                <th scope="col" className="num">Bloqueadas</th>
-                <th scope="col" className="num">Horas em aberto</th>
+                <th scope="col" className="num">HC necessário</th>
+                <th scope="col" className="num">Alocados</th>
+                <th scope="col" className="num">Défice</th>
               </tr>
             </thead>
             <tbody>
@@ -129,12 +128,14 @@ export function SummaryView({ summary }: { summary: Summary }) {
                   <th scope="row">{p.name}</th>
                   <td>{p.teamName}</td>
                   <td>{PROJECT_STATUS_LABEL[p.status]}</td>
+                  <td>{PRIORITY_LABEL[p.priority]}</td>
                   <td>{p.endDate ?? '—'}</td>
-                  <td className="num">{formatBp(p.progressBp)}</td>
-                  <td className="num">{p.openTasks}</td>
-                  <td className="num">{p.overdueTasks}</td>
-                  <td className="num">{p.blockedTasks}</td>
-                  <td className="num">{p.openEstimateHours}</td>
+                  <td className="num">{p.plannedHeadcount === 0 ? '—' : p.plannedHeadcount}</td>
+                  <td className="num">{p.allocatedPeople} · {(p.allocatedPct / 100).toFixed(1).replace('.', ',')}&nbsp;FTE</td>
+                  <td className="num">
+                    {p.gapPct === 0 ? '—' : `${(p.gapPct / 100).toFixed(1).replace('.', ',')} FTE`}
+                    {p.gapPct > 0 && p.status !== 'done' && <span className="flag"> ▲</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -185,30 +186,34 @@ export function SummaryView({ summary }: { summary: Summary }) {
         </>
       )}
 
-      <h3>Carga por consultor</h3>
-      {workload.length === 0 ? (
+      <h3>Alocação por consultor</h3>
+      {allocations.length === 0 ? (
         <p className="empty">Sem consultores ativos.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Carga de trabalho por consultor</caption>
+            <caption className="sr-only">Total alocado por consultor</caption>
             <thead>
               <tr>
                 <th scope="col">Consultor</th>
                 <th scope="col">Equipa</th>
-                <th scope="col" className="num">Tarefas abertas</th>
-                <th scope="col" className="num">Em atraso</th>
-                <th scope="col" className="num">Horas em aberto</th>
+                <th scope="col" className="num">Projetos</th>
+                <th scope="col" className="num">Total alocado</th>
+                <th scope="col">Situação</th>
               </tr>
             </thead>
             <tbody>
-              {workload.map((w) => (
-                <tr key={w.code}>
-                  <th scope="row">{w.code}</th>
-                  <td>{w.teamName}</td>
-                  <td className="num">{w.openTasks}</td>
-                  <td className="num">{w.overdueTasks}</td>
-                  <td className="num">{w.openEstimateHours}</td>
+              {allocations.map((a) => (
+                <tr key={a.code}>
+                  <th scope="row">{a.code}</th>
+                  <td>{a.teamName}</td>
+                  <td className="num">{a.projectCount}</td>
+                  <td className="num">{a.allocatedPct}&nbsp;%</td>
+                  <td>
+                    {a.allocatedPct === 0 && <span className="flag">▲ sem alocação</span>}
+                    {a.allocatedPct > 100 && <span className="flag">▲ sobre-alocado</span>}
+                    {a.allocatedPct > 0 && a.allocatedPct <= 100 && 'OK'}
+                  </td>
                 </tr>
               ))}
             </tbody>
