@@ -26,3 +26,12 @@ test('businessDate usa o dia civil de Lisboa, não UTC', () => {
   assert.equal(businessDate(new Date('2026-07-01T23:30:00Z')), '2026-07-02'); // verão: UTC+1
   assert.equal(businessDate(new Date('2026-01-01T23:30:00Z')), '2026-01-01'); // inverno: UTC+0
 });
+
+test('budget em euros é opcional: vazio vale 0', async () => {
+  const { parseOptionalEuroToCents, formatOptionalCents } = await import('./money.ts');
+  assert.equal(parseOptionalEuroToCents(''), 0);
+  assert.equal(parseOptionalEuroToCents('  '), 0);
+  assert.equal(parseOptionalEuroToCents('1.000,00'), 100_000);
+  assert.equal(parseOptionalEuroToCents('1000.00'), null);
+  assert.equal(formatOptionalCents(0), '—');
+});

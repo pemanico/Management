@@ -167,3 +167,18 @@ test('skills matrix: gaps, validação e cobertura', async () => {
   assert.deepEqual((await call('/api/requirements')).data, []);
   close();
 });
+
+test('unidade só com budget em headcount: sem alertas de dinheiro', async () => {
+  const { call, close } = await setup();
+  const team = (await call('/api/teams', 'POST', { name: 'H', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
+  await call('/api/projects', 'POST', {
+    name: 'P', teamId: team.id, status: 'active', startDate: null, endDate: null, budgetCents: 80_000_00,
+  });
+  const s = (await call('/api/summary')).data as any;
+  const types = s.alerts.map((a: any) => a.type);
+  assert.ok(!types.includes('budget_over_90'));
+  assert.ok(!types.includes('projects_exceed_budget'));
+  assert.ok(types.includes('vacancies')); // o budget em headcount continua a alertar
+  assert.equal(s.teams[0].utilisationBp, null);
+  close();
+});

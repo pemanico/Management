@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import type { Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
-import { centsToInput, formatCents, parseEuroToCents } from '../money.ts';
+import { centsToInput, formatOptionalCents, parseOptionalEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
 import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 
@@ -9,7 +9,7 @@ type Props = { teams: Team[]; onChanged: () => Promise<void> };
 type Form = { name: string; budget: string; actual: string; planned: string };
 type Errors = Partial<Record<keyof Form, string>>;
 
-const EMPTY: Form = { name: '', budget: '', actual: '0,00', planned: '0' };
+const EMPTY: Form = { name: '', budget: '', actual: '', planned: '0' };
 
 export function TeamsView({ teams, onChanged }: Props) {
   const [form, setForm] = useState<Form>(EMPTY);
@@ -32,8 +32,8 @@ export function TeamsView({ teams, onChanged }: Props) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     const next: Errors = {};
-    const budgetCents = parseEuroToCents(form.budget);
-    const actualCents = parseEuroToCents(form.actual);
+    const budgetCents = parseOptionalEuroToCents(form.budget);
+    const actualCents = parseOptionalEuroToCents(form.actual);
     const planned = Number(form.planned);
     if (form.name.trim() === '') next.name = 'Indica o nome da equipa.';
     if (budgetCents === null) next.budget = 'Formato inválido. Exemplo: 120.000,00';
@@ -87,13 +87,13 @@ export function TeamsView({ teams, onChanged }: Props) {
         <Field label="Nome" error={errors.name}>
           {(c) => <input {...c} name="name" type="text" autoComplete="off" value={form.name} onChange={set('name')} />}
         </Field>
-        <Field label="Budget anual (EUR)" hint="Ex.: 120.000,00" error={errors.budget}>
+        <Field label="Budget em dinheiro (EUR)" hint="Opcional. Deixa vazio se o teu budget é só em headcount." error={errors.budget}>
           {(c) => <input {...c} name="budget" type="text" inputMode="decimal" autoComplete="off" value={form.budget} onChange={set('budget')} />}
         </Field>
-        <Field label="Gasto real até hoje (EUR)" hint="Ex.: 95.500,00" error={errors.actual}>
+        <Field label="Gasto real até hoje (EUR)" hint="Opcional" error={errors.actual}>
           {(c) => <input {...c} name="actual" type="text" inputMode="decimal" autoComplete="off" value={form.actual} onChange={set('actual')} />}
         </Field>
-        <Field label="Headcount planeado" error={errors.planned}>
+        <Field label="Headcount orçamentado" hint="O teu budget em pessoas" error={errors.planned}>
           {(c) => <input {...c} name="planned" type="number" inputMode="numeric" min={0} step={1} value={form.planned} onChange={set('planned')} />}
         </Field>
         <div className="actions">
@@ -117,9 +117,9 @@ export function TeamsView({ teams, onChanged }: Props) {
             <thead>
               <tr>
                 <th scope="col">Equipa</th>
-                <th scope="col" className="num">Budget</th>
-                <th scope="col" className="num">Gasto real</th>
-                <th scope="col" className="num">Headcount planeado</th>
+                <th scope="col" className="num">Headcount orçamentado</th>
+                <th scope="col" className="num">Budget (EUR)</th>
+                <th scope="col" className="num">Gasto real (EUR)</th>
                 <th scope="col">Atualizado</th>
                 <th scope="col"><span className="sr-only">Ações</span></th>
               </tr>
@@ -128,9 +128,9 @@ export function TeamsView({ teams, onChanged }: Props) {
               {teams.map((t) => (
                 <tr key={t.id}>
                   <th scope="row">{t.name}</th>
-                  <td className="num">{formatCents(t.budgetCents)}</td>
-                  <td className="num">{formatCents(t.actualCents)}</td>
                   <td className="num">{t.plannedHeadcount}</td>
+                  <td className="num">{formatOptionalCents(t.budgetCents)}</td>
+                  <td className="num">{t.budgetCents === 0 ? '—' : formatOptionalCents(t.actualCents)}</td>
                   <td>{t.updatedAt.slice(0, 10)}</td>
                   <td className="row-actions">
                     <button type="button" className="link" onClick={() => edit(t)} aria-label={`Editar ${t.name}`}>

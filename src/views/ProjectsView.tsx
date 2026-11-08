@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { PROJECT_STATUSES, type Project, type ProjectStatus, type Task, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
-import { centsToInput, formatCents, parseEuroToCents } from '../money.ts';
+import { centsToInput, formatOptionalCents, parseOptionalEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
 import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 
@@ -17,7 +17,7 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   done: 'Concluído',
 };
 
-const EMPTY: Form = { name: '', teamId: '', status: 'planned', startDate: '', endDate: '', budget: '0,00' };
+const EMPTY: Form = { name: '', teamId: '', status: 'planned', startDate: '', endDate: '', budget: '' };
 
 export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
   const [form, setForm] = useState<Form>(EMPTY);
@@ -48,7 +48,7 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     const next: Errors = {};
-    const budgetCents = parseEuroToCents(form.budget);
+    const budgetCents = parseOptionalEuroToCents(form.budget);
     if (form.name.trim() === '') next.name = 'Indica o nome do projeto.';
     if (form.teamId === '') next.teamId = 'Escolhe uma equipa.';
     if (budgetCents === null) next.budget = 'Formato inválido. Exemplo: 25.000,00';
@@ -90,7 +90,7 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
       status: p.status,
       startDate: p.startDate ?? '',
       endDate: p.endDate ?? '',
-      budget: centsToInput(p.budgetCents),
+      budget: p.budgetCents === 0 ? '' : centsToInput(p.budgetCents),
     });
   }
 
@@ -127,7 +127,7 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
               </select>
             )}
           </Field>
-          <Field label="Budget do projeto (EUR)" hint="Ex.: 25.000,00" error={errors.budget}>
+          <Field label="Budget do projeto (EUR)" hint="Opcional" error={errors.budget}>
             {(c) => <input {...c} name="budget" type="text" inputMode="decimal" autoComplete="off" value={form.budget} onChange={set('budget')} />}
           </Field>
           <Field label="Início" hint="Opcional">
@@ -174,7 +174,7 @@ export function ProjectsView({ teams, projects, tasks, onChanged }: Props) {
                   </td>
                   <td>{p.startDate ?? '—'}</td>
                   <td>{p.endDate ?? '—'}</td>
-                  <td className="num">{formatCents(p.budgetCents)}</td>
+                  <td className="num">{formatOptionalCents(p.budgetCents)}</td>
                   <td className="num">
                     <a href={`#/tarefas?projeto=${p.id}`}>{taskCount.get(p.id) ?? 0}</a>
                   </td>

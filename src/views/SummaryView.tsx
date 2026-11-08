@@ -22,15 +22,16 @@ const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
 
 export function SummaryView({ summary }: { summary: Summary }) {
   const { totals, teams, alerts, projects, workload, skills } = summary;
+  const hasMoney = totals.budgetCents > 0; // budget em euros é opcional (muitas unidades só têm budget em headcount)
   return (
     <section aria-labelledby="sum-title">
       <h2 id="sum-title">Resumo da unidade</h2>
       <p className="muted-text">Atualizado a {summary.generatedAt.slice(0, 16).replace('T', ' ')} UTC</p>
 
       <dl className="kpis">
-        <div className="card"><dt>Budget total</dt><dd>{formatCents(totals.budgetCents)}</dd></div>
-        <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>
-        <div className="card"><dt>Headcount ativo / planeado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
+        {hasMoney && <div className="card"><dt>Budget total</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
+        {hasMoney && <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
+        <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
         <div className="card"><dt>Projetos / tarefas em aberto</dt><dd>{totals.openProjects} / {totals.openTasks}</dd></div>
         <div className="card"><dt>Alertas</dt><dd>{alerts.length}</dd></div>
       </dl>
@@ -58,10 +59,10 @@ export function SummaryView({ summary }: { summary: Summary }) {
             <thead>
               <tr>
                 <th scope="col">Equipa</th>
-                <th scope="col" className="num">Budget</th>
-                <th scope="col" className="num">Gasto</th>
-                <th scope="col" className="num">% consumido</th>
-                <th scope="col" className="num">Ativos / planeados</th>
+                <th scope="col" className="num">Ativos / orçamentados</th>
+                {hasMoney && <th scope="col" className="num">Budget</th>}
+                {hasMoney && <th scope="col" className="num">Gasto</th>}
+                {hasMoney && <th scope="col" className="num">% consumido</th>}
                 <th scope="col" className="num">Rate paga média</th>
                 <th scope="col" className="num">Rate faturada média</th>
                 <th scope="col" className="num">Margem</th>
@@ -75,18 +76,20 @@ export function SummaryView({ summary }: { summary: Summary }) {
               {teams.map((t) => (
                 <tr key={t.teamId}>
                   <th scope="row">{t.name}</th>
-                  <td className="num">{formatCents(t.budgetCents)}</td>
-                  <td className="num">{formatCents(t.actualCents)}</td>
-                  <td className="num">
-                    {formatBp(t.utilisationBp)}
-                    {t.utilisationBp !== null && t.utilisationBp >= 9000 && <span className="flag"> ▲ alto</span>}
-                  </td>
                   <td className="num">
                     {t.activeHeadcount} / {t.plannedHeadcount}
                     {t.headcountGap !== 0 && (
-                      <span className="flag"> {t.headcountGap > 0 ? `${t.headcountGap} vaga(s)` : `+${-t.headcountGap}`}</span>
+                      <span className="flag"> {t.headcountGap > 0 ? `${t.headcountGap} vaga(s)` : `+${-t.headcountGap} acima`}</span>
                     )}
                   </td>
+                  {hasMoney && <td className="num">{formatCents(t.budgetCents)}</td>}
+                  {hasMoney && <td className="num">{formatCents(t.actualCents)}</td>}
+                  {hasMoney && (
+                    <td className="num">
+                      {formatBp(t.utilisationBp)}
+                      {t.utilisationBp !== null && t.utilisationBp >= 9000 && <span className="flag"> ▲ alto</span>}
+                    </td>
+                  )}
                   <td className="num">{formatCents(t.avgCostRateCentsPerDay)}</td>
                   <td className="num">{formatCents(t.avgBillRateCentsPerDay)}</td>
                   <td className="num">{formatBp(t.marginBp)}</td>

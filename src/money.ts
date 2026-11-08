@@ -28,3 +28,13 @@ const pctFmt = new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 1, maximu
 export function formatBp(bp: number | null): string {
   return bp === null ? '—' : `${pctFmt.format(bp / 100)} %`;
 }
+
+/** Budgets em euros são opcionais: 0 significa "sem budget em dinheiro". Só apresentação. */
+export function formatOptionalCents(cents: number): string {
+  return cents === 0 ? '—' : formatCents(cents);
+}
+
+/** Input opcional: vazio -> 0 cêntimos; inválido -> null. */
+export function parseOptionalEuroToCents(input: string): number | null {
+  return input.trim() === '' ? 0 : parseEuroToCents(input);
+}

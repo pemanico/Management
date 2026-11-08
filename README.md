@@ -25,6 +25,7 @@ Para usar uma base de dados de teste separada:
 - API só escuta em localhost e rejeita Hosts não locais. Sem autenticação: é uma app de utilizador único.
 - Projetos e tarefas: apagar um projeto apaga as suas tarefas (com confirmação); apagar um consultor deixa as tarefas sem responsável. O filtro por projeto fica na URL (`#/tarefas?projeto=1`).
 - "Hoje" (atrasos, contratos a expirar, datas de avaliação) é o dia civil em Lisboa, não UTC (`shared/dates.ts`). Timestamps de auditoria ficam em ISO UTC.
+- O budget é, antes de mais, **headcount** (`Headcount orçamentado`). Os montantes em euros (budget, gasto, budget de projetos) são opcionais: vazio = 0 = "sem budget em dinheiro". Com tudo a 0, a app esconde as colunas e os alertas de dinheiro.
 - Moeda única (EUR). Sem dependências além de React/Vite/TS.
 
 - Skill matrix: níveis 0–4; cada avaliação é *validada* (exige evidência) ou *autoavaliação*. Os requisitos são por equipa (nível mínimo + nº mínimo de pessoas). Alerta de avaliações com mais de 365 dias. O export para o Claude leva só a cobertura agregada, nunca as avaliações individuais.

@@ -121,7 +121,7 @@ export function buildSummary(
         scope: `${t.name} / ${c.code}`,
         message: `Consultor sem atualização há mais de ${STALE_DAYS} dias.`,
       });
-    if (projectBudget > t.budgetCents)
+    if (t.budgetCents > 0 && projectBudget > t.budgetCents)
       alerts.push({
         type: 'projects_exceed_budget',
         scope: t.name,
