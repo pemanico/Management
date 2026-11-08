@@ -278,3 +278,66 @@ test('formação: fecha gaps, alerta quando não fecha e quando está em atraso'
   assert.deepEqual((await call('/api/trainings')).data, []);
   close();
 });
+
+test('objetivos e avaliações: validação, agregados e sem dados individuais no resumo', async () => {
+  const { call, close } = await setup();
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedHeadcount: 2 })).data as { id: number };
+  const mk = async (code: string) =>
+    ((await call('/api/consultants', 'POST', {
+      code, teamId: team.id, profile: 'x', seniority: 'pleno',
+      costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
+    })).data as { id: number }).id;
+  const c1 = await mk('C1');
+  const c2 = await mk('C2');
+  const year = businessDate().slice(0, 4);
+  const obj = { teamId: null, title: 'Entregar EMIR', period: year, status: 'on_track', progressPct: 40, dueDate: null };
+
+  // objetivo: exatamente um âmbito; período e coerência
+  assert.equal((await call('/api/objectives', 'POST', { ...obj, consultantId: c1, teamId: team.id })).status, 400);
+  assert.equal((await call('/api/objectives', 'POST', { ...obj, consultantId: null })).status, 400);
+  assert.equal((await call('/api/objectives', 'POST', { ...obj, consultantId: c1, period: '26' })).status, 400);
+  assert.equal((await call('/api/objectives', 'POST', { ...obj, consultantId: c1, status: 'achieved', progressPct: 60 })).status, 400);
+
+  await call('/api/objectives', 'POST', { ...obj, consultantId: c1 });
+  await call('/api/objectives', 'POST', { ...obj, consultantId: c1, title: 'Atrasado', status: 'at_risk', progressPct: 10, dueDate: '2020-01-01' });
+  await call('/api/objectives', 'POST', { ...obj, consultantId: null, teamId: team.id, title: 'Equipa', status: 'achieved', progressPct: 100 });
+
+  let s = (await call('/api/summary')).data as any;
+  assert.equal(s.objectives.total, 3);
+  assert.equal(s.objectives.achieved, 1);
+  assert.equal(s.objectives.atRisk, 1);
+  assert.equal(s.objectives.overdue, 1);
+  assert.equal(s.objectives.avgProgressBp, 5000); // (40+10+100)/3 = 50 %
+  const types = s.alerts.map((a: any) => a.type);
+  for (const t of ['objective_at_risk', 'objective_overdue', 'consultant_without_objectives'])
+    assert.ok(types.includes(t), t); // C2 não tem objetivos
+
+  // avaliação final exige resumo; classificação 1–4; data não futura; único por período
+  const ev = { consultantId: c1, period: year, rating: 3, summary: 'Entregou EMIR dentro do prazo', status: 'final', evaluatedAt: businessDate() };
+  assert.equal((await call('/api/evaluations', 'POST', { ...ev, summary: '' })).status, 400);
+  assert.equal((await call('/api/evaluations', 'POST', { ...ev, rating: 5 })).status, 400);
+  assert.equal((await call('/api/evaluations', 'POST', { ...ev, evaluatedAt: '2999-01-01' })).status, 400);
+  const created = await call('/api/evaluations', 'POST', ev);
+  assert.equal(created.status, 201);
+  assert.equal((await call('/api/evaluations', 'POST', ev)).status, 409);
+  // rascunho pode ter resumo vazio
+  assert.equal((await call('/api/evaluations', 'POST', { ...ev, consultantId: c2, status: 'draft', summary: '' })).status, 201);
+
+  s = (await call('/api/summary')).data as any;
+  assert.equal(s.evaluations.finalCount, 1);
+  assert.equal(s.evaluations.draftCount, 1);
+  assert.equal(s.evaluations.missingCount, 1); // C2 só tem rascunho
+
+  // PRIVACIDADE: o resumo (que vai para o Claude) não contém notas nem textos individuais
+  const raw = JSON.stringify(s);
+  assert.ok(!raw.includes('Entregou EMIR dentro do prazo'));
+  assert.ok(!raw.includes('"rating"'));
+  assert.ok(!raw.includes('Atrasado'));
+  assert.ok(!raw.includes('C1') || !raw.includes('Entregar EMIR'));
+
+  // apagar consultor apaga objetivos e avaliações dele
+  await call(`/api/consultants/${c1}`, 'DELETE');
+  assert.equal(((await call('/api/evaluations')).data as any[]).length, 1);
+  assert.equal(((await call('/api/objectives')).data as any[]).length, 1); // só o da equipa
+  close();
+});

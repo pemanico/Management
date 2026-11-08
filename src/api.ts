@@ -3,6 +3,10 @@ import type {
   AllocationInput,
   Consultant,
   ConsultantInput,
+  Evaluation,
+  EvaluationInput,
+  Objective,
+  ObjectiveInput,
   Project,
   ProjectInput,
   Rating,
@@ -74,6 +78,18 @@ export const api = {
       ? request<Training>('/trainings', 'POST', input)
       : request<Training>(`/trainings/${id}`, 'PUT', input),
   deleteTraining: (id: number) => request<{ ok: true }>(`/trainings/${id}`, 'DELETE'),
+  objectives: () => request<Objective[]>('/objectives'),
+  saveObjective: (input: ObjectiveInput, id?: number) =>
+    id === undefined
+      ? request<Objective>('/objectives', 'POST', input)
+      : request<Objective>(`/objectives/${id}`, 'PUT', input),
+  deleteObjective: (id: number) => request<{ ok: true }>(`/objectives/${id}`, 'DELETE'),
+  evaluations: () => request<Evaluation[]>('/evaluations'),
+  saveEvaluation: (input: EvaluationInput, id?: number) =>
+    id === undefined
+      ? request<Evaluation>('/evaluations', 'POST', input)
+      : request<Evaluation>(`/evaluations/${id}`, 'PUT', input),
+  deleteEvaluation: (id: number) => request<{ ok: true }>(`/evaluations/${id}`, 'DELETE'),
   saveSkill: (input: SkillInput, id?: number) =>
     id === undefined ? request<Skill>('/skills', 'POST', input) : request<Skill>(`/skills/${id}`, 'PUT', input),
   deleteSkill: (id: number) => request<{ ok: true }>(`/skills/${id}`, 'DELETE'),

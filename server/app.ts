@@ -5,6 +5,8 @@ import { centsToDecimal, toCsv } from './csv.ts';
 import {
   parseAllocation,
   parseConsultant,
+  parseEvaluation,
+  parseObjective,
   parseProject,
   parseRating,
   parseRequirement,
@@ -87,6 +89,8 @@ export function createApp(db: Db): Server {
             db.listRatings(),
             db.listRequirements(),
             db.listTrainings(),
+            db.listObjectives(),
+            db.listEvaluations(),
           ),
         );
       }
@@ -154,6 +158,40 @@ export function createApp(db: Db): Server {
               people.get(a.consultantId) ?? '',
               a.allocationPct,
               a.updatedAt,
+            ]),
+          );
+          return send(res, 200, csv, 'text/csv');
+        }
+        if (kind === 'objectives') {
+          const people = new Map(db.listConsultants().map((c) => [c.id, c.code]));
+          const teams = new Map(db.listTeams().map((t) => [t.id, t.name]));
+          const csv = toCsv(
+            ['ambito', 'responsavel', 'titulo', 'periodo', 'estado', 'progresso_pct', 'data_limite', 'atualizado_em'],
+            db.listObjectives().map((o) => [
+              o.teamId !== null ? 'equipa' : 'consultor',
+              o.teamId !== null ? (teams.get(o.teamId) ?? '') : (people.get(o.consultantId ?? 0) ?? ''),
+              o.title,
+              o.period,
+              o.status,
+              o.progressPct,
+              o.dueDate,
+              o.updatedAt,
+            ]),
+          );
+          return send(res, 200, csv, 'text/csv');
+        }
+        if (kind === 'evaluations') {
+          const people = new Map(db.listConsultants().map((c) => [c.id, c.code]));
+          const csv = toCsv(
+            ['consultor', 'periodo', 'classificacao', 'estado', 'avaliada_em', 'resumo', 'atualizado_em'],
+            db.listEvaluations().map((e) => [
+              people.get(e.consultantId) ?? '',
+              e.period,
+              e.rating,
+              e.status,
+              e.evaluatedAt,
+              e.summary,
+              e.updatedAt,
             ]),
           );
           return send(res, 200, csv, 'text/csv');
@@ -349,6 +387,73 @@ export function createApp(db: Db): Server {
         }
         if (idPart && method === 'DELETE') {
           if (db.deleteSkill(parseId(idPart)) === 0) throw new HttpError(404, 'Competência não encontrada.');
+          return send(res, 200, { ok: true });
+        }
+      }
+
+      if (resource === 'objectives') {
+        const guard = (e: unknown): never => {
+          if (isConstraint(e)) throw new HttpError(409, 'Consultor ou equipa inválidos.');
+          throw e;
+        };
+        if (!idPart && method === 'GET') return send(res, 200, db.listObjectives());
+        if (!idPart && method === 'POST') {
+          const p = parseObjective(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            return send(res, 201, db.getObjective(db.createObjective(p.value)));
+          } catch (e) {
+            return guard(e);
+          }
+        }
+        if (idPart && method === 'PUT') {
+          const id = parseId(idPart);
+          const p = parseObjective(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            if (db.updateObjective(id, p.value) === 0) throw new HttpError(404, 'Objetivo não encontrado.');
+          } catch (e) {
+            if (e instanceof HttpError) throw e;
+            return guard(e);
+          }
+          return send(res, 200, db.getObjective(id));
+        }
+        if (idPart && method === 'DELETE') {
+          if (db.deleteObjective(parseId(idPart)) === 0) throw new HttpError(404, 'Objetivo não encontrado.');
+          return send(res, 200, { ok: true });
+        }
+      }
+
+      if (resource === 'evaluations') {
+        const guard = (e: unknown): never => {
+          if (isConstraint(e))
+            throw new HttpError(409, 'Já existe uma avaliação deste consultor para esse período (ou o consultor é inválido).');
+          throw e;
+        };
+        if (!idPart && method === 'GET') return send(res, 200, db.listEvaluations());
+        if (!idPart && method === 'POST') {
+          const p = parseEvaluation(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            return send(res, 201, db.getEvaluation(db.createEvaluation(p.value)));
+          } catch (e) {
+            return guard(e);
+          }
+        }
+        if (idPart && method === 'PUT') {
+          const id = parseId(idPart);
+          const p = parseEvaluation(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            if (db.updateEvaluation(id, p.value) === 0) throw new HttpError(404, 'Avaliação não encontrada.');
+          } catch (e) {
+            if (e instanceof HttpError) throw e;
+            return guard(e);
+          }
+          return send(res, 200, db.getEvaluation(id));
+        }
+        if (idPart && method === 'DELETE') {
+          if (db.deleteEvaluation(parseId(idPart)) === 0) throw new HttpError(404, 'Avaliação não encontrada.');
           return send(res, 200, { ok: true });
         }
       }

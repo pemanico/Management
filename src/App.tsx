@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Allocation, Consultant, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
+import type { Allocation, Consultant, Evaluation, Objective, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
 import { api, ApiError } from './api.ts';
 import { SummaryView } from './views/SummaryView.tsx';
 import { TeamsView } from './views/TeamsView.tsx';
@@ -10,6 +10,8 @@ import { AllocationsView } from './views/AllocationsView.tsx';
 import { SkillsView } from './views/SkillsView.tsx';
 import { MatrixView } from './views/MatrixView.tsx';
 import { TrainingView } from './views/TrainingView.tsx';
+import { ObjectivesView } from './views/ObjectivesView.tsx';
+import { EvaluationsView } from './views/EvaluationsView.tsx';
 
 const ROUTES = [
   { id: 'resumo', label: 'Resumo' },
@@ -20,6 +22,8 @@ const ROUTES = [
   { id: 'competencias', label: 'Competências' },
   { id: 'matriz', label: 'Skill matrix' },
   { id: 'formacao', label: 'Formação' },
+  { id: 'objetivos', label: 'Objetivos' },
+  { id: 'avaliacoes', label: 'Avaliações' },
   { id: 'exportar', label: 'Exportar' },
 ] as const;
 type RouteId = (typeof ROUTES)[number]['id'];
@@ -39,6 +43,8 @@ type Data = {
   ratings: Rating[];
   requirements: Requirement[];
   trainings: Training[];
+  objectives: Objective[];
+  evaluations: Evaluation[];
 };
 type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: Data };
 
@@ -57,7 +63,7 @@ export function App() {
   // Os três pedidos são independentes: arrancam em paralelo (sem waterfall).
   const load = useCallback(async () => {
     try {
-      const [summary, teams, consultants, projects, allocations, skills, ratings, requirements, trainings] = await Promise.all([
+      const [summary, teams, consultants, projects, allocations, skills, ratings, requirements, trainings, objectives, evaluations] = await Promise.all([
         api.summary(),
         api.teams(),
         api.consultants(),
@@ -67,10 +73,12 @@ export function App() {
         api.ratings(),
         api.requirements(),
         api.trainings(),
+        api.objectives(),
+        api.evaluations(),
       ]);
       setState({
         status: 'ready',
-        data: { summary, teams, consultants, projects, allocations, skills, ratings, requirements, trainings },
+        data: { summary, teams, consultants, projects, allocations, skills, ratings, requirements, trainings, objectives, evaluations },
       });
     } catch (err) {
       setState({ status: 'error', message: err instanceof ApiError ? err.message : 'Ocorreu um erro.' });
@@ -175,6 +183,27 @@ export function App() {
                 requirements={state.data.requirements}
                 trainings={state.data.trainings}
                 coverage={state.data.summary.skills.coverage}
+                onChanged={saved}
+              />
+            )}
+            {route === 'objetivos' && (
+              <ObjectivesView
+                teams={state.data.teams}
+                consultants={state.data.consultants}
+                objectives={state.data.objectives}
+                periodFilter={params.get('periodo') ?? ''}
+                onFilter={(p) => {
+                  window.location.hash = p === '' ? '#/objetivos' : `#/objetivos?periodo=${encodeURIComponent(p)}`;
+                }}
+                onChanged={saved}
+              />
+            )}
+            {route === 'avaliacoes' && (
+              <EvaluationsView
+                teams={state.data.teams}
+                consultants={state.data.consultants}
+                objectives={state.data.objectives}
+                evaluations={state.data.evaluations}
                 onChanged={saved}
               />
             )}

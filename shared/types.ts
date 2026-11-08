@@ -105,6 +105,36 @@ export type TrainingInput = {
 
 export type Training = TrainingInput & { id: number; updatedAt: string };
 
+export const OBJECTIVE_STATUSES = ['not_started', 'on_track', 'at_risk', 'achieved', 'missed'] as const;
+export type ObjectiveStatus = (typeof OBJECTIVE_STATUSES)[number];
+
+export const EVALUATION_STATUSES = ['draft', 'final'] as const;
+export type EvaluationStatus = (typeof EVALUATION_STATUSES)[number];
+
+/** Períodos: 'YYYY', 'YYYY-H1' ou 'YYYY-H2'. */
+export const PERIOD_RE = /^\d{4}(-H[12])?$/;
+
+export type ObjectiveInput = {
+  consultantId: number | null; // exatamente um de consultantId / teamId
+  teamId: number | null;
+  title: string;
+  period: string;
+  status: ObjectiveStatus;
+  progressPct: number; // 0–100
+  dueDate: string | null; // YYYY-MM-DD
+};
+export type Objective = ObjectiveInput & { id: number; updatedAt: string };
+
+export type EvaluationInput = {
+  consultantId: number;
+  period: string;
+  rating: number; // 1–4, atribuído SEMPRE por uma pessoa (a app nunca o calcula)
+  summary: string; // evidência e justificação (obrigatória se final)
+  status: EvaluationStatus;
+  evaluatedAt: string; // YYYY-MM-DD
+};
+export type Evaluation = EvaluationInput & { id: number; updatedAt: string };
+
 export type Alert = {
   type:
     | 'budget_over_90'
@@ -123,7 +153,11 @@ export type Alert = {
     | 'skill_unvalidated'
     | 'skill_assessment_old'
     | 'training_overdue'
-    | 'training_gap_uncovered';
+    | 'training_gap_uncovered'
+    | 'objective_at_risk'
+    | 'objective_overdue'
+    | 'consultant_without_objectives'
+    | 'evaluation_pending';
   scope: string;
   message: string;
 };
@@ -200,6 +234,20 @@ export type Summary = {
     validatedRatioBp: number | null;
     coverage: SkillCoverage[];
   };
+  // Só agregados: nunca expõe objetivos nem notas individuais.
+  objectives: {
+    year: string;
+    total: number;
+    achieved: number;
+    onTrack: number;
+    atRisk: number;
+    missed: number;
+    notStarted: number;
+    overdue: number;
+    avgProgressBp: number | null;
+    byTeam: { teamName: string; total: number; achieved: number; atRisk: number; overdue: number; avgProgressBp: number | null }[];
+  };
+  evaluations: { year: string; finalCount: number; draftCount: number; missingCount: number };
   training: {
     openCount: number; // planeadas + em curso
     overdueCount: number;

@@ -20,10 +20,14 @@ const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   skill_assessment_old: 'Avaliações antigas',
   training_overdue: 'Formação em atraso',
   training_gap_uncovered: 'Gap sem plano de formação',
+  objective_at_risk: 'Objetivos em risco',
+  objective_overdue: 'Objetivos em atraso',
+  consultant_without_objectives: 'Sem objetivos',
+  evaluation_pending: 'Avaliações em falta',
 };
 
 export function SummaryView({ summary }: { summary: Summary }) {
-  const { totals, teams, alerts, projects, allocations, skills, training } = summary;
+  const { totals, teams, alerts, projects, allocations, skills, training, objectives, evaluations } = summary;
   const hasMoney = totals.budgetCents > 0; // budget em euros é opcional (muitas unidades só têm budget em headcount)
   return (
     <section aria-labelledby="sum-title">
@@ -35,6 +39,8 @@ export function SummaryView({ summary }: { summary: Summary }) {
         {hasMoney && <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
         <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
         <div className="card"><dt>Formações em aberto</dt><dd>{training.openCount}</dd></div>
+        <div className="card"><dt>Objetivos {objectives.year} atingidos / total</dt><dd>{objectives.achieved} / {objectives.total}</dd></div>
+        <div className="card"><dt>Avaliações {evaluations.year} finais / em falta</dt><dd>{evaluations.finalCount} / {evaluations.missingCount}</dd></div>
         <div className="card"><dt>Projetos em aberto</dt><dd>{totals.openProjects}</dd></div>
         <div className="card"><dt>Alertas</dt><dd>{alerts.length}</dd></div>
       </dl>

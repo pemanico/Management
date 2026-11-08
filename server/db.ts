@@ -1,6 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 import type {
   Allocation,
+  Evaluation,
+  EvaluationInput,
+  Objective,
+  ObjectiveInput,
   AllocationInput,
   Consultant,
   Rating,
@@ -75,6 +79,29 @@ CREATE TABLE IF NOT EXISTS ratings (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (consultant_id, skill_id)
 );
+CREATE TABLE IF NOT EXISTS objectives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER REFERENCES consultants(id) ON DELETE CASCADE,
+  team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  period TEXT NOT NULL,
+  status TEXT NOT NULL,
+  progress_pct INTEGER NOT NULL CHECK (progress_pct BETWEEN 0 AND 100),
+  due_date TEXT,
+  updated_at TEXT NOT NULL,
+  CHECK ((consultant_id IS NULL) <> (team_id IS NULL))
+);
+CREATE TABLE IF NOT EXISTS evaluations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL REFERENCES consultants(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 4),
+  summary TEXT NOT NULL,
+  status TEXT NOT NULL,
+  evaluated_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (consultant_id, period)
+);
 CREATE TABLE IF NOT EXISTS trainings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   consultant_id INTEGER NOT NULL REFERENCES consultants(id) ON DELETE CASCADE,
@@ -101,6 +128,12 @@ const SKILL_SELECT = `SELECT id, name, category, updated_at AS updatedAt FROM sk
 
 const RATING_SELECT = `SELECT consultant_id AS consultantId, skill_id AS skillId, level, validated,
   evidence, assessed_at AS assessedAt, updated_at AS updatedAt FROM ratings`;
+
+const OBJECTIVE_SELECT = `SELECT id, consultant_id AS consultantId, team_id AS teamId, title, period, status,
+  progress_pct AS progressPct, due_date AS dueDate, updated_at AS updatedAt FROM objectives`;
+
+const EVALUATION_SELECT = `SELECT id, consultant_id AS consultantId, period, rating, summary, status,
+  evaluated_at AS evaluatedAt, updated_at AS updatedAt FROM evaluations`;
 
 const TRAINING_SELECT = `SELECT id, consultant_id AS consultantId, skill_id AS skillId,
   target_level AS targetLevel, kind, title, status, due_date AS dueDate, cost_cents AS costCents,
@@ -289,6 +322,52 @@ export function openDb(path: string) {
         db.prepare('DELETE FROM ratings WHERE consultant_id=? AND skill_id=?').run(consultantId, skillId)
           .changes,
       ),
+
+    listObjectives: () => db.prepare(`${OBJECTIVE_SELECT} ORDER BY period DESC, id`).all() as Objective[],
+    getObjective: (id: number) =>
+      db.prepare(`${OBJECTIVE_SELECT} WHERE id = ?`).get(id) as Objective | undefined,
+    createObjective: (o: ObjectiveInput) =>
+      Number(
+        db
+          .prepare(
+            `INSERT INTO objectives (consultant_id, team_id, title, period, status, progress_pct, due_date, updated_at)
+             VALUES (?,?,?,?,?,?,?,?)`,
+          )
+          .run(o.consultantId, o.teamId, o.title, o.period, o.status, o.progressPct, o.dueDate, now()).lastInsertRowid,
+      ),
+    updateObjective: (id: number, o: ObjectiveInput) =>
+      Number(
+        db
+          .prepare(
+            `UPDATE objectives SET consultant_id=?, team_id=?, title=?, period=?, status=?, progress_pct=?,
+             due_date=?, updated_at=? WHERE id=?`,
+          )
+          .run(o.consultantId, o.teamId, o.title, o.period, o.status, o.progressPct, o.dueDate, now(), id).changes,
+      ),
+    deleteObjective: (id: number) => Number(db.prepare('DELETE FROM objectives WHERE id=?').run(id).changes),
+
+    listEvaluations: () => db.prepare(`${EVALUATION_SELECT} ORDER BY period DESC, id`).all() as Evaluation[],
+    getEvaluation: (id: number) =>
+      db.prepare(`${EVALUATION_SELECT} WHERE id = ?`).get(id) as Evaluation | undefined,
+    createEvaluation: (e: EvaluationInput) =>
+      Number(
+        db
+          .prepare(
+            `INSERT INTO evaluations (consultant_id, period, rating, summary, status, evaluated_at, updated_at)
+             VALUES (?,?,?,?,?,?,?)`,
+          )
+          .run(e.consultantId, e.period, e.rating, e.summary, e.status, e.evaluatedAt, now()).lastInsertRowid,
+      ),
+    updateEvaluation: (id: number, e: EvaluationInput) =>
+      Number(
+        db
+          .prepare(
+            `UPDATE evaluations SET consultant_id=?, period=?, rating=?, summary=?, status=?, evaluated_at=?,
+             updated_at=? WHERE id=?`,
+          )
+          .run(e.consultantId, e.period, e.rating, e.summary, e.status, e.evaluatedAt, now(), id).changes,
+      ),
+    deleteEvaluation: (id: number) => Number(db.prepare('DELETE FROM evaluations WHERE id=?').run(id).changes),
 
     listTrainings: () => db.prepare(`${TRAINING_SELECT} ORDER BY id`).all() as Training[],
     getTraining: (id: number) =>

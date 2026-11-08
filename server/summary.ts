@@ -4,6 +4,8 @@ import type {
   Allocation,
   Consultant,
   ConsultantAllocation,
+  Evaluation,
+  Objective,
   Project,
   ProjectSummary,
   Rating,
@@ -20,6 +22,8 @@ const DAY_MS = 86_400_000;
 const STALE_DAYS = 30;
 const EXPIRY_DAYS = 90;
 const ASSESSMENT_OLD_DAYS = 365;
+// Avisos de avaliações em falta só a partir deste mês (outubro): antes disso o ciclo ainda decorre.
+const EVALUATION_ALERT_FROM_MONTH = 10;
 
 function avgRounded(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -44,6 +48,8 @@ export function buildSummary(
   ratings: Rating[],
   requirements: Requirement[],
   trainings: Training[],
+  objectives: Objective[],
+  evaluations: Evaluation[],
   now = new Date(),
 ): Summary {
   const today = businessDate(now);
@@ -51,6 +57,8 @@ export function buildSummary(
   const staleBefore = now.getTime() - STALE_DAYS * DAY_MS;
   const oldBefore = businessDate(new Date(now.getTime() - ASSESSMENT_OLD_DAYS * DAY_MS));
   const alerts: Alert[] = [];
+  const year = today.slice(0, 4);
+  const month = Number(today.slice(5, 7));
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const skillById = new Map(skills.map((k) => [k.id, k]));
@@ -219,6 +227,61 @@ export function buildSummary(
   });
 
   const personById = new Map(consultants.map((c) => [c.id, c]));
+
+  // ---- Objetivos (ano corrente) e avaliações: só agregados saem daqui ----
+  const activeIds = new Set(consultants.filter((c) => c.status === 'active').map((c) => c.id));
+  const teamOfObjective = (o: Objective): number | undefined =>
+    o.teamId ?? (o.consultantId !== null ? personById.get(o.consultantId)?.teamId : undefined);
+  const yearObjectives = objectives.filter(
+    (o) => o.period.startsWith(year) && (o.consultantId === null || activeIds.has(o.consultantId)),
+  );
+  const isOverdueObjective = (o: Objective) =>
+    o.dueDate !== null && o.dueDate < today && o.status !== 'achieved' && o.status !== 'missed';
+  const avgBp = (os: Objective[]) =>
+    os.length === 0 ? null : Math.round((os.reduce((a, o) => a + o.progressPct, 0) * 100) / os.length);
+  const count = (st: Objective['status']) => yearObjectives.filter((o) => o.status === st).length;
+
+  const objectivesByTeam = teams.map((t) => {
+    const os = yearObjectives.filter((o) => teamOfObjective(o) === t.id);
+    const overdue = os.filter(isOverdueObjective).length;
+    const atRisk = os.filter((o) => o.status === 'at_risk').length;
+    if (atRisk > 0)
+      alerts.push({ type: 'objective_at_risk', scope: t.name, message: `${atRisk} objetivo(s) em risco.` });
+    if (overdue > 0)
+      alerts.push({ type: 'objective_overdue', scope: t.name, message: `${overdue} objetivo(s) com data limite ultrapassada.` });
+    const withoutObjectives = consultants.filter(
+      (c) => c.teamId === t.id && c.status === 'active' && !yearObjectives.some((o) => o.consultantId === c.id),
+    ).length;
+    if (withoutObjectives > 0)
+      alerts.push({
+        type: 'consultant_without_objectives',
+        scope: t.name,
+        message: `${withoutObjectives} consultor(es) ativo(s) sem objetivos para ${year}.`,
+      });
+    return {
+      teamName: t.name,
+      total: os.length,
+      achieved: os.filter((o) => o.status === 'achieved').length,
+      atRisk,
+      overdue,
+      avgProgressBp: avgBp(os),
+    };
+  });
+
+  const yearEvals = evaluations.filter((e) => e.period.startsWith(year) && activeIds.has(e.consultantId));
+  const withFinal = new Set(yearEvals.filter((e) => e.status === 'final').map((e) => e.consultantId));
+  const missingEvals = consultants.filter((c) => c.status === 'active' && !withFinal.has(c.id));
+  if (month >= EVALUATION_ALERT_FROM_MONTH) {
+    for (const t of teams) {
+      const n = missingEvals.filter((c) => c.teamId === t.id).length;
+      if (n > 0)
+        alerts.push({
+          type: 'evaluation_pending',
+          scope: t.name,
+          message: `${n} consultor(es) sem avaliação final de ${year}.`,
+        });
+    }
+  }
   const overdueTrainings = trainings.filter((tr) => isOpenTraining(tr) && tr.dueDate !== null && tr.dueDate < today);
   for (const tr of overdueTrainings) {
     const c = personById.get(tr.consultantId);
@@ -293,6 +356,24 @@ export function buildSummary(
           ? Math.round((ratings.filter((r) => r.validated).length * 10_000) / ratings.length)
           : null,
       coverage,
+    },
+    objectives: {
+      year,
+      total: yearObjectives.length,
+      achieved: count('achieved'),
+      onTrack: count('on_track'),
+      atRisk: count('at_risk'),
+      missed: count('missed'),
+      notStarted: count('not_started'),
+      overdue: yearObjectives.filter(isOverdueObjective).length,
+      avgProgressBp: avgBp(yearObjectives),
+      byTeam: objectivesByTeam,
+    },
+    evaluations: {
+      year,
+      finalCount: yearEvals.filter((e) => e.status === 'final').length,
+      draftCount: yearEvals.filter((e) => e.status === 'draft').length,
+      missingCount: missingEvals.length,
     },
     training: {
       openCount: trainings.filter(isOpenTraining).length,

@@ -1,5 +1,8 @@
 import { businessDate } from '../shared/dates.ts';
 import {
+  EVALUATION_STATUSES,
+  OBJECTIVE_STATUSES,
+  PERIOD_RE,
   PRIORITIES,
   PROJECT_STATUSES,
   SENIORITIES,
@@ -7,6 +10,10 @@ import {
   TRAINING_KINDS,
   TRAINING_STATUSES,
   type ConsultantInput,
+  type EvaluationInput,
+  type EvaluationStatus,
+  type ObjectiveInput,
+  type ObjectiveStatus,
   type Priority,
   type ProjectInput,
   type ProjectStatus,
@@ -229,5 +236,63 @@ export function parseTraining(body: unknown): Result<TrainingInput> {
       dueDate: due.value,
       costCents,
     },
+  };
+}
+
+export function parseObjective(body: unknown): Result<ObjectiveInput> {
+  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  const hasC = body.consultantId !== null && body.consultantId !== undefined;
+  const hasT = body.teamId !== null && body.teamId !== undefined;
+  if (hasC === hasT) return { ok: false, error: 'Escolhe um consultor OU uma equipa para o objetivo.' };
+  const consultantId = hasC ? intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER) : null;
+  const teamId = hasT ? intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER) : null;
+  if (hasC && consultantId === null) return { ok: false, error: 'Consultor inválido.' };
+  if (hasT && teamId === null) return { ok: false, error: 'Equipa inválida.' };
+  const title = text(body.title, 140);
+  if (title === null) return { ok: false, error: 'Título do objetivo inválido (1–140 caracteres).' };
+  if (typeof body.period !== 'string' || !PERIOD_RE.test(body.period))
+    return { ok: false, error: 'Período inválido. Usa 2026, 2026-H1 ou 2026-H2.' };
+  if (!OBJECTIVE_STATUSES.includes(body.status as ObjectiveStatus))
+    return { ok: false, error: 'Estado do objetivo inválido.' };
+  const progressPct = intIn(body.progressPct, 0, 100);
+  if (progressPct === null) return { ok: false, error: 'Progresso inválido (0–100 %).' };
+  if (body.status === 'achieved' && progressPct !== 100)
+    return { ok: false, error: 'Um objetivo atingido tem de ter 100 % de progresso.' };
+  const due = optDate(body.dueDate);
+  if (!due.ok) return { ok: false, error: 'Data limite inválida.' };
+  return {
+    ok: true,
+    value: {
+      consultantId,
+      teamId,
+      title,
+      period: body.period,
+      status: body.status as ObjectiveStatus,
+      progressPct,
+      dueDate: due.value,
+    },
+  };
+}
+
+export function parseEvaluation(body: unknown, today = businessDate()): Result<EvaluationInput> {
+  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  const consultantId = intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER);
+  if (consultantId === null) return { ok: false, error: 'Consultor inválido.' };
+  if (typeof body.period !== 'string' || !PERIOD_RE.test(body.period))
+    return { ok: false, error: 'Período inválido. Usa 2026, 2026-H1 ou 2026-H2.' };
+  const rating = intIn(body.rating, 1, 4);
+  if (rating === null) return { ok: false, error: 'Classificação inválida (1–4).' };
+  if (!EVALUATION_STATUSES.includes(body.status as EvaluationStatus))
+    return { ok: false, error: 'Estado da avaliação inválido.' };
+  const summary = typeof body.summary === 'string' ? body.summary.trim() : '';
+  if (summary.length > 500) return { ok: false, error: 'Resumo demasiado longo (máx. 500 caracteres).' };
+  if (body.status === 'final' && summary === '')
+    return { ok: false, error: 'Uma avaliação final precisa de resumo com a evidência que a sustenta.' };
+  if (typeof body.evaluatedAt !== 'string' || !isIsoDate(body.evaluatedAt))
+    return { ok: false, error: 'Data da avaliação inválida.' };
+  if (body.evaluatedAt > today) return { ok: false, error: 'A data da avaliação não pode ser futura.' };
+  return {
+    ok: true,
+    value: { consultantId, period: body.period, rating, summary, status: body.status as EvaluationStatus, evaluatedAt: body.evaluatedAt },
   };
 }
