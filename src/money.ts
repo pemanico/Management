@@ -38,3 +38,17 @@ export function formatOptionalCents(cents: number): string {
 export function parseOptionalEuroToCents(input: string): number | null {
   return input.trim() === '' ? 0 : parseEuroToCents(input);
 }
+
+const hcFmt = new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 2 });
+
+/** Headcount em FTE (pode ter frações: há pessoas repartidas por equipas). Só apresentação. */
+export function formatHc(n: number): string {
+  return hcFmt.format(n);
+}
+
+/** "2", "2,5", "0,25" -> número com no máximo 2 casas; null se inválido. Calculado em centésimos inteiros. */
+export function parseHc(input: string): number | null {
+  const m = /^(\d{1,4})(?:,(\d{1,2}))?$/.exec(input.trim());
+  if (!m) return null;
+  return (Number(m[1]) * 100 + Number((m[2] ?? '0').padEnd(2, '0'))) / 100;
+}

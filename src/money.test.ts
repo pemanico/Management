@@ -35,3 +35,15 @@ test('budget em euros é opcional: vazio vale 0', async () => {
   assert.equal(parseOptionalEuroToCents('1000.00'), null);
   assert.equal(formatOptionalCents(0), '—');
 });
+
+test('parseHc / formatHc: headcount com frações em formato pt', async () => {
+  const { parseHc, formatHc } = await import('./money.ts');
+  assert.equal(parseHc('2'), 2);
+  assert.equal(parseHc('2,5'), 2.5);
+  assert.equal(parseHc('0,25'), 0.25);
+  assert.equal(parseHc('2.5'), null);
+  assert.equal(parseHc('1,255'), null);
+  assert.equal(parseHc(''), null);
+  assert.equal(formatHc(2.5), '2,5');
+  assert.equal(formatHc(3), '3');
+});

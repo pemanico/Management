@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS teams (
   actual_cents INTEGER NOT NULL CHECK (actual_cents >= 0),
   planned_headcount INTEGER NOT NULL CHECK (planned_headcount >= 0),
   planned_external_headcount INTEGER NOT NULL DEFAULT 0 CHECK (planned_external_headcount >= 0),
+  planned_internal_c INTEGER NOT NULL DEFAULT 0 CHECK (planned_internal_c >= 0),
+  planned_external_c INTEGER NOT NULL DEFAULT 0 CHECK (planned_external_c >= 0),
   updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS consultants (
@@ -45,6 +47,12 @@ CREATE TABLE IF NOT EXISTS consultants (
   contract_end TEXT,
   status TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS consultant_teams (
+  consultant_id INTEGER NOT NULL REFERENCES consultants(id) ON DELETE CASCADE,
+  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  pct INTEGER NOT NULL CHECK (pct BETWEEN 1 AND 99),
+  PRIMARY KEY (consultant_id, team_id)
 );
 CREATE TABLE IF NOT EXISTS projects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,9 +164,9 @@ const ALLOCATION_SELECT = `SELECT project_id AS projectId, consultant_id AS cons
   allocation_pct AS allocationPct, updated_at AS updatedAt FROM allocations`;
 
 const TEAM_SELECT = `SELECT id, name, budget_cents AS budgetCents, actual_cents AS actualCents,
-  planned_headcount AS plannedHeadcount,
-  planned_headcount - planned_external_headcount AS plannedInternalHeadcount,
-  planned_external_headcount AS plannedExternalHeadcount, updated_at AS updatedAt FROM teams`;
+  (planned_internal_c + planned_external_c) / 100.0 AS plannedHeadcount,
+  planned_internal_c / 100.0 AS plannedInternalHeadcount,
+  planned_external_c / 100.0 AS plannedExternalHeadcount, updated_at AS updatedAt FROM teams`;
 
 const CONSULTANT_SELECT = `SELECT id, code, team_id AS teamId, profile, seniority,
   kind, cost_rate_cents_per_day AS costRateCentsPerDay, supplier,
@@ -181,12 +189,53 @@ export function openDb(path: string) {
     db.exec('ALTER TABLE teams ADD COLUMN planned_external_headcount INTEGER NOT NULL DEFAULT 0');
     db.exec('UPDATE teams SET planned_external_headcount = planned_headcount');
   }
+  // Headcount orçamentado passa a centésimos de FTE (colunas *_c); as colunas antigas ficam só por compatibilidade.
+  const teamCols2 = (db.prepare('PRAGMA table_info(teams)').all() as { name: string }[]).map((c) => c.name);
+  if (!teamCols2.includes('planned_internal_c')) {
+    db.exec('ALTER TABLE teams ADD COLUMN planned_internal_c INTEGER NOT NULL DEFAULT 0');
+    db.exec('ALTER TABLE teams ADD COLUMN planned_external_c INTEGER NOT NULL DEFAULT 0');
+    db.exec(`UPDATE teams SET planned_internal_c = (planned_headcount - planned_external_headcount) * 100,
+             planned_external_c = planned_external_headcount * 100`);
+  }
   const projectCols = (db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).map((c) => c.name);
   if (!projectCols.includes('priority'))
     db.exec("ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
   if (!projectCols.includes('planned_headcount'))
     db.exec('ALTER TABLE projects ADD COLUMN planned_headcount INTEGER NOT NULL DEFAULT 0');
   const now = () => new Date().toISOString();
+  // [total arredondado, externos arredondado (colunas antigas), internos em centésimos, externos em centésimos]
+  const hc = (t: TeamInput) => {
+    const i = Math.round(t.plannedInternalHeadcount * 100);
+    const e = Math.round(t.plannedExternalHeadcount * 100);
+    return [Math.round((i + e) / 100), Math.round(e / 100), i, e] as const;
+  };
+  type Row = Omit<Consultant, 'extraTeams'>;
+  const withShares = (rows: Row[]): Consultant[] => {
+    const shares = db
+      .prepare('SELECT consultant_id AS consultantId, team_id AS teamId, pct FROM consultant_teams ORDER BY team_id')
+      .all() as { consultantId: number; teamId: number; pct: number }[];
+    return rows.map((r) => ({
+      ...r,
+      extraTeams: shares.filter((x) => x.consultantId === r.id).map(({ teamId, pct }) => ({ teamId, pct })),
+    }));
+  };
+  const setShares = (id: number, c: ConsultantInput) => {
+    db.prepare('DELETE FROM consultant_teams WHERE consultant_id = ?').run(id);
+    const ins = db.prepare('INSERT INTO consultant_teams (consultant_id, team_id, pct) VALUES (?,?,?)');
+    for (const x of c.extraTeams) ins.run(id, x.teamId, x.pct);
+  };
+  // Consultor + repartição gravados juntos ou nada.
+  const tx = <T>(fn: () => T): T => {
+    db.exec('BEGIN');
+    try {
+      const out = fn();
+      db.exec('COMMIT');
+      return out;
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+  };
 
   return {
     close: () => db.close(),
@@ -196,26 +245,25 @@ export function openDb(path: string) {
     createTeam: (t: TeamInput) => {
       const r = db
         .prepare(
-          'INSERT INTO teams (name, budget_cents, actual_cents, planned_headcount, planned_external_headcount, updated_at) VALUES (?,?,?,?,?,?)',
+          'INSERT INTO teams (name, budget_cents, actual_cents, planned_headcount, planned_external_headcount, planned_internal_c, planned_external_c, updated_at) VALUES (?,?,?,?,?,?,?,?)',
         )
-        .run(t.name, t.budgetCents, t.actualCents, t.plannedInternalHeadcount + t.plannedExternalHeadcount, t.plannedExternalHeadcount, now());
+        .run(t.name, t.budgetCents, t.actualCents, ...hc(t), now());
       return Number(r.lastInsertRowid);
     },
     updateTeam: (id: number, t: TeamInput) =>
       Number(
         db
           .prepare(
-            'UPDATE teams SET name=?, budget_cents=?, actual_cents=?, planned_headcount=?, planned_external_headcount=?, updated_at=? WHERE id=?',
+            'UPDATE teams SET name=?, budget_cents=?, actual_cents=?, planned_headcount=?, planned_external_headcount=?, planned_internal_c=?, planned_external_c=?, updated_at=? WHERE id=?',
           )
-          .run(t.name, t.budgetCents, t.actualCents, t.plannedInternalHeadcount + t.plannedExternalHeadcount, t.plannedExternalHeadcount, now(), id).changes,
+          .run(t.name, t.budgetCents, t.actualCents, ...hc(t), now(), id).changes,
       ),
     deleteTeam: (id: number) => Number(db.prepare('DELETE FROM teams WHERE id=?').run(id).changes),
 
-    listConsultants: () =>
-      db.prepare(`${CONSULTANT_SELECT} ORDER BY code`).all() as Consultant[],
+    listConsultants: () => withShares(db.prepare(`${CONSULTANT_SELECT} ORDER BY code`).all() as Row[]),
     getConsultant: (id: number) =>
-      db.prepare(`${CONSULTANT_SELECT} WHERE id = ?`).get(id) as Consultant | undefined,
-    createConsultant: (c: ConsultantInput) => {
+      withShares(db.prepare(`${CONSULTANT_SELECT} WHERE id = ?`).all(id) as Row[])[0],
+    createConsultant: (c: ConsultantInput) => tx(() => {
       const r = db
         .prepare(
           `INSERT INTO consultants (code, team_id, profile, seniority, kind, cost_rate_cents_per_day,
@@ -233,10 +281,12 @@ export function openDb(path: string) {
           c.status,
           now(),
         );
-      return Number(r.lastInsertRowid);
-    },
-    updateConsultant: (id: number, c: ConsultantInput) =>
-      Number(
+      const id = Number(r.lastInsertRowid);
+      setShares(id, c);
+      return id;
+    }),
+    updateConsultant: (id: number, c: ConsultantInput) => tx(() => {
+      const changes = Number(
         db
           .prepare(
             `UPDATE consultants SET code=?, team_id=?, profile=?, seniority=?, kind=?, cost_rate_cents_per_day=?,
@@ -255,7 +305,10 @@ export function openDb(path: string) {
             now(),
             id,
           ).changes,
-      ),
+      );
+      if (changes > 0) setShares(id, c);
+      return changes;
+    }),
     deleteConsultant: (id: number) =>
       Number(db.prepare('DELETE FROM consultants WHERE id=?').run(id).changes),
 

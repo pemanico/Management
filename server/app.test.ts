@@ -364,7 +364,7 @@ test('internos não guardam rate; externos exigem rate; médias só de externos'
   assert.equal(s.teams[0].avgCostRateCentsPerDay, 450_00); // interno não baixa a média
   assert.ok(!s.alerts.some((a: any) => a.type === 'missing_cost_rate'));
   const csv = (await call('/api/export?kind=consultants')).data as string;
-  assert.ok(/I1;T;x;pleno;internal;;;/.test(csv));
+  assert.ok(/I1;T;;x;pleno;internal;;;/.test(csv));
   close();
 });
 
@@ -392,6 +392,50 @@ test('headcount por tipo, fornecedores e custo de externos', async () => {
     assert.equal(s.teams[0].externalMonthlyCostCents, 30_000_00); // (400+600+500) x 20
     assert.equal(s.totals.externalAnnualCostCents, 330_000_00); // x 11 meses
     assert.ok(!JSON.stringify(s).includes('billRate') && !JSON.stringify(s).includes('marginBp'));
+  } finally {
+    close();
+  }
+});
+
+test('pessoas repartidas por equipas: headcount e custo em frações, sem dupla contagem', async () => {
+  const { call, close } = await setup();
+  try {
+    const mkTeam = async (name: string, i: number, e: number) =>
+      ((await call('/api/teams', 'POST', { name, budgetCents: 0, actualCents: 0, plannedInternalHeadcount: i, plannedExternalHeadcount: e })).data as any).id as number;
+    assert.equal((await call('/api/teams', 'POST', { name: 'X', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0.255, plannedExternalHeadcount: 0 })).status, 400);
+    const a = await mkTeam('A', 0.5, 1.5);
+    const b = await mkTeam('B', 0.5, 0.5);
+    const base = { profile: 'x', seniority: 'lead', contractEnd: null, status: 'active' };
+    const ext = { ...base, kind: 'external', supplier: 'Acme' };
+    // validações da repartição
+    const bad = (extraTeams: unknown) => call('/api/consultants', 'POST', { ...base, code: 'BAD', kind: 'internal', teamId: a, extraTeams });
+    assert.equal((await bad([{ teamId: a, pct: 50 }])).status, 400); // repete a principal
+    assert.equal((await bad([{ teamId: b, pct: 100 }])).status, 400);
+    assert.equal((await bad([{ teamId: b, pct: 50 }, { teamId: b, pct: 10 }])).status, 400);
+    assert.equal((await bad([{ teamId: 9999, pct: 50 }])).status, 409); // equipa inexistente: nada fica gravado
+    assert.equal(((await call('/api/consultants')).data as any[]).length, 0);
+
+    // manager interno 50/50; gestor de projeto externo 50/50 a 400/dia; externo só de A a 300/dia
+    const mgr = await call('/api/consultants', 'POST', { ...base, code: 'M1', kind: 'internal', teamId: a, extraTeams: [{ teamId: b, pct: 50 }] });
+    assert.deepEqual((mgr.data as any).extraTeams, [{ teamId: b, pct: 50 }]);
+    await call('/api/consultants', 'POST', { ...ext, code: 'PM1', teamId: a, costRateCentsPerDay: 400_00, extraTeams: [{ teamId: b, pct: 50 }] });
+    await call('/api/consultants', 'POST', { ...ext, code: 'E1', teamId: a, costRateCentsPerDay: 300_00 });
+
+    let s = (await call('/api/summary')).data as any;
+    const [ta, tb] = s.teams;
+    assert.deepEqual([ta.internalHeadcount, ta.externalHeadcount, ta.activeHeadcount, ta.headcountGap], [0.5, 1.5, 2, 0]);
+    assert.deepEqual([tb.internalHeadcount, tb.externalHeadcount, tb.sharedIn, tb.headcountGap], [0.5, 0.5, 2, 0]);
+    assert.equal(ta.externalMonthlyCostCents, 10_000_00); // (300 + 400/2) x 20
+    assert.equal(tb.externalMonthlyCostCents, 4_000_00); // 400/2 x 20
+    assert.deepEqual([s.totals.activeHeadcount, s.totals.sharedPeople, s.totals.plannedHeadcount], [3, 2, 3]); // 3 pessoas, não 5
+    assert.equal(s.totals.externalMonthlyCostCents, 14_000_00);
+    assert.ok(!s.alerts.some((x: any) => x.type === 'vacancies' || x.type === 'over_headcount'));
+
+    // apagar a equipa B devolve as frações à equipa principal
+    assert.equal((await call(`/api/teams/${b}`, 'DELETE')).status, 200);
+    s = (await call('/api/summary')).data as any;
+    assert.deepEqual([s.teams[0].internalHeadcount, s.teams[0].externalHeadcount], [1, 2]);
+    assert.ok(s.alerts.some((x: any) => x.message.includes('0,5 interno(s) acima')));
   } finally {
     close();
   }

@@ -55,13 +55,20 @@ export function isIsoDate(v: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
+/** Headcount em FTE: número ≥ 0 com no máximo 2 casas decimais (ex.: 2.5). */
+function fteIn(v: unknown): number | null {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 10_000) return null;
+  const c = Math.round(v * 100);
+  return Math.abs(v * 100 - c) < 1e-6 ? c / 100 : null;
+}
+
 export function parseTeam(body: unknown): Result<TeamInput> {
   if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
   const name = text(body.name, 80);
   const budgetCents = intIn(body.budgetCents, 0, MAX_CENTS);
   const actualCents = intIn(body.actualCents, 0, MAX_CENTS);
-  const plannedInternalHeadcount = intIn(body.plannedInternalHeadcount, 0, 10_000);
-  const plannedExternalHeadcount = intIn(body.plannedExternalHeadcount, 0, 10_000);
+  const plannedInternalHeadcount = fteIn(body.plannedInternalHeadcount);
+  const plannedExternalHeadcount = fteIn(body.plannedExternalHeadcount);
   if (name === null) return { ok: false, error: 'Nome da equipa inválido (1–80 caracteres).' };
   if (budgetCents === null) return { ok: false, error: 'Budget inválido.' };
   if (actualCents === null) return { ok: false, error: 'Gasto real inválido.' };
@@ -96,6 +103,23 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
     supplier = text(body.supplier, 60);
     if (supplier === null) return { ok: false, error: 'Um consultor externo precisa de fornecedor (1–60 caracteres).' };
   }
+  // Outras equipas (opcional): frações 1–99, sem repetir nem incluir a principal; a principal fica com o resto (≥ 1 %).
+  const extraTeams: { teamId: number; pct: number }[] = [];
+  if (body.extraTeams !== undefined && body.extraTeams !== null) {
+    if (!Array.isArray(body.extraTeams) || body.extraTeams.length > 50)
+      return { ok: false, error: 'Repartição por equipas inválida.' };
+    for (const x of body.extraTeams as unknown[]) {
+      if (!isRecord(x)) return { ok: false, error: 'Repartição por equipas inválida.' };
+      const tid = intIn(x.teamId, 1, Number.MAX_SAFE_INTEGER);
+      const pct = intIn(x.pct, 1, 99);
+      if (tid === null || pct === null) return { ok: false, error: 'Cada equipa adicional precisa de uma percentagem entre 1 e 99.' };
+      if (tid === teamId) return { ok: false, error: 'A equipa principal não pode repetir-se nas outras equipas.' };
+      if (extraTeams.some((e) => e.teamId === tid)) return { ok: false, error: 'Há uma equipa repetida na repartição.' };
+      extraTeams.push({ teamId: tid, pct });
+    }
+    if (extraTeams.reduce((a, e) => a + e.pct, 0) > 99)
+      return { ok: false, error: 'As outras equipas somam 100 % ou mais: a equipa principal tem de ficar com pelo menos 1 %.' };
+  }
   let contractEnd: string | null = null;
   if (body.contractEnd !== null && body.contractEnd !== undefined && body.contractEnd !== '') {
     if (typeof body.contractEnd !== 'string' || !isIsoDate(body.contractEnd))
@@ -107,6 +131,7 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
     value: {
       code,
       teamId,
+      extraTeams,
       profile,
       seniority: body.seniority as Seniority,
       kind: body.kind as ConsultantKind,

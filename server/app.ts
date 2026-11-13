@@ -105,8 +105,8 @@ export function createApp(db: Db): Server {
               t.name,
               centsToDecimal(t.budgetCents),
               centsToDecimal(t.actualCents),
-              t.plannedInternalHeadcount,
-              t.plannedExternalHeadcount,
+              String(t.plannedInternalHeadcount).replace('.', ','),
+              String(t.plannedExternalHeadcount).replace('.', ','),
               t.updatedAt,
             ]),
           );
@@ -115,10 +115,11 @@ export function createApp(db: Db): Server {
         if (kind === 'consultants') {
           const teams = new Map(db.listTeams().map((t) => [t.id, t.name]));
           const csv = toCsv(
-            ['codigo', 'equipa', 'perfil', 'senioridade', 'tipo', 'fornecedor', 'rate_dia_eur', 'fim_contrato', 'estado', 'atualizado_em'],
+            ['codigo', 'equipa_principal', 'outras_equipas', 'perfil', 'senioridade', 'tipo', 'fornecedor', 'rate_dia_eur', 'fim_contrato', 'estado', 'atualizado_em'],
             db.listConsultants().map((c) => [
               c.code,
               teams.get(c.teamId) ?? '',
+              c.extraTeams.map((x) => `${teams.get(x.teamId) ?? ''} ${x.pct}%`).join(' | '),
               c.profile,
               c.seniority,
               c.kind,

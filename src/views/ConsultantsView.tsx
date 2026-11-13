@@ -16,11 +16,12 @@ type Form = {
   supplier: string;
   contractEnd: string;
   status: Status;
+  extra: { teamId: string; pct: string }[];
 };
 type Errors = Partial<Record<keyof Form, string>>;
 
 const EMPTY: Form = {
-  code: '', teamId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', supplier: '', contractEnd: '', status: 'active',
+  code: '', teamId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', supplier: '', contractEnd: '', status: 'active', extra: [],
 };
 
 const SENIORITY_LABEL: Record<Seniority, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sénior', lead: 'Lead' };
@@ -38,8 +39,22 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
   // Sugestões no campo Fornecedor: evita o mesmo fornecedor escrito de duas maneiras.
   const suppliers = [...new Set(consultants.map((c) => c.supplier).filter((n): n is string => n !== null))].sort();
 
-  const set = (k: keyof Form) => (e: { target: { value: string } }) =>
+  const set = (k: Exclude<keyof Form, 'extra'>) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // ---- Outras equipas (pessoa repartida): a equipa principal fica com o resto ----
+  const extraSum = form.extra.reduce((a, x) => a + (Number.isInteger(Number(x.pct)) ? Number(x.pct) : 0), 0);
+  const setExtra = (i: number, patch: Partial<{ teamId: string; pct: string }>) =>
+    setForm((f) => ({ ...f, extra: f.extra.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+  const addExtra = () => setForm((f) => ({ ...f, extra: [...f.extra, { teamId: '', pct: '' }] }));
+  const removeExtra = (i: number) => setForm((f) => ({ ...f, extra: f.extra.filter((_, j) => j !== i) }));
+  // Para quem está em todas as equipas (ex.: o manager): partes iguais, o resto fica na principal.
+  const splitAll = () =>
+    setForm((f) => {
+      const others = teams.filter((t) => String(t.id) !== f.teamId);
+      const each = Math.floor(100 / (others.length + 1));
+      return { ...f, extra: each < 1 ? f.extra : others.map((t) => ({ teamId: String(t.id), pct: String(each) })) };
+    });
 
   function reset() {
     setForm(EMPTY);
@@ -62,6 +77,12 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
     const supplier = external ? form.supplier.trim() : '';
     if (!/^[A-Za-z0-9_-]{1,20}$/.test(form.code.trim())) next.code = 'Usa um código (ex.: C001), sem espaços nem nomes reais.';
     if (form.teamId === '') next.teamId = 'Escolhe uma equipa.';
+    const extraOk =
+      form.extra.every((x) => x.teamId !== '' && x.teamId !== form.teamId && /^\d{1,2}$/.test(x.pct) && Number(x.pct) >= 1) &&
+      new Set(form.extra.map((x) => x.teamId)).size === form.extra.length &&
+      extraSum <= 99;
+    if (!extraOk)
+      next.extra = 'Cada equipa adicional precisa de equipa (diferente da principal, sem repetir) e de 1 a 99 %; a soma tem de ficar abaixo de 100 %.';
     if (form.profile.trim() === '') next.profile = 'Indica o perfil.';
     if (costCents === null) next.cost = 'Formato inválido. Exemplo: 450,00';
     else if (external && costCents === 0) next.cost = 'Um externo precisa de rate maior que zero.';
@@ -76,6 +97,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
         {
           code: form.code.trim(),
           teamId: Number(form.teamId),
+          extraTeams: form.extra.map((x) => ({ teamId: Number(x.teamId), pct: Number(x.pct) })),
           profile: form.profile.trim(),
           seniority: form.seniority,
           kind: form.kind,
@@ -109,6 +131,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
       supplier: c.supplier ?? '',
       contractEnd: c.contractEnd ?? '',
       status: c.status,
+      extra: c.extraTeams.map((x) => ({ teamId: String(x.teamId), pct: String(x.pct) })),
     });
   }
 
@@ -128,7 +151,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
           <Field label="Código (pseudónimo)" hint="Ex.: C001. Não uses nomes reais." error={errors.code}>
             {(c) => <input {...c} name="code" type="text" autoComplete="off" value={form.code} onChange={set('code')} />}
           </Field>
-          <Field label="Equipa" error={errors.teamId}>
+          <Field label="Equipa principal" hint="Onde contam skills e objetivos" error={errors.teamId}>
             {(c) => (
               <select {...c} name="team" value={form.teamId} onChange={set('teamId')}>
                 <option value="">Escolher…</option>
@@ -184,6 +207,42 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
               </select>
             )}
           </Field>
+          <fieldset className="shares">
+            <legend>Outras equipas (opcional)</legend>
+            <p className="hint">
+              Para quem está em mais de uma equipa (manager, gestor de projeto, arquiteto transversal). O headcount e o custo
+              repartem-se pelas percentagens; a equipa principal fica com o resto: <strong>{100 - extraSum} %</strong>.
+            </p>
+            {form.extra.map((x, i) => (
+              <div key={i} className="share-row">
+                <select aria-label={`Outra equipa ${i + 1}`} value={x.teamId} onChange={(e) => setExtra(i, { teamId: e.target.value })}>
+                  <option value="">Escolher…</option>
+                  {teams.filter((t) => String(t.id) !== form.teamId).map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                <input
+                  aria-label={`Percentagem na outra equipa ${i + 1}`}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="%"
+                  value={x.pct}
+                  onChange={(e) => setExtra(i, { pct: e.target.value })}
+                />
+                <button type="button" className="link danger" onClick={() => removeExtra(i)} aria-label={`Remover outra equipa ${i + 1}`}>
+                  Remover
+                </button>
+              </div>
+            ))}
+            {errors.extra && <small className="error" role="alert">{errors.extra}</small>}
+            <div className="actions">
+              <button type="button" onClick={addExtra} disabled={teams.length < 2}>Adicionar outra equipa</button>
+              <button type="button" onClick={splitAll} disabled={teams.length < 2 || form.teamId === ''}>
+                Repartir por todas as equipas
+              </button>
+            </div>
+          </fieldset>
           <div className="actions">
             <button type="submit" className="primary" disabled={saving}>
               {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar consultor' : 'Guardar alterações'}
@@ -204,7 +263,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
             <thead>
               <tr>
                 <th scope="col">Código</th>
-                <th scope="col">Equipa</th>
+                <th scope="col">Equipa(s)</th>
                 <th scope="col">Perfil</th>
                 <th scope="col">Senioridade</th>
                 <th scope="col">Tipo</th>
@@ -220,7 +279,15 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
               {consultants.map((c) => (
                 <tr key={c.id} className={c.status === 'inactive' ? 'muted' : undefined}>
                   <th scope="row">{c.code}</th>
-                  <td>{teamName.get(c.teamId) ?? '—'}</td>
+                  <td>
+                    {teamName.get(c.teamId) ?? '—'}
+                    {c.extraTeams.length > 0 && (
+                      <>
+                        {' '}{100 - c.extraTeams.reduce((a, x) => a + x.pct, 0)} %
+                        {c.extraTeams.map((x) => ` · ${teamName.get(x.teamId) ?? '—'} ${x.pct} %`).join('')}
+                      </>
+                    )}
+                  </td>
                   <td>{c.profile}</td>
                   <td>{SENIORITY_LABEL[c.seniority]}</td>
                   <td>{KIND_LABEL[c.kind]}</td>

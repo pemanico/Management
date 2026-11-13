@@ -17,8 +17,9 @@ export type TeamInput = {
   name: string;
   budgetCents: number;
   actualCents: number;
-  plannedInternalHeadcount: number; // budget em pessoas: vagas de internos
-  plannedExternalHeadcount: number; // budget em pessoas: vagas de externos
+  // Budget em pessoas (FTE). Aceita frações até 2 casas (ex.: 2.5), porque há pessoas repartidas por equipas.
+  plannedInternalHeadcount: number;
+  plannedExternalHeadcount: number;
 };
 
 // plannedHeadcount = internos + externos (calculado pelo servidor)
@@ -31,9 +32,13 @@ export const WORK_MONTHS_PER_YEAR = 11;
 export const CONSULTANT_KINDS = ['internal', 'external'] as const;
 export type ConsultantKind = (typeof CONSULTANT_KINDS)[number];
 
+/** Parte de uma pessoa noutra equipa além da principal (pct: 1–99; 100 = pessoa inteira). */
+export type TeamShare = { teamId: number; pct: number };
+
 export type ConsultantInput = {
   code: string; // código pseudónimo (ex.: C001), nunca o nome real
-  teamId: number;
+  teamId: number; // equipa principal: fica com o resto (100 - soma das outras) e é onde contam skills e objetivos
+  extraTeams: TeamShare[]; // outras equipas onde a pessoa está repartida (headcount e custo em fração)
   profile: string;
   seniority: Seniority;
   kind: ConsultantKind; // interno (sem rate nem salário registados) ou externo (com rate)
@@ -182,7 +187,8 @@ export type TeamSummary = {
   utilisationBp: number | null; // pontos base (10000 = 100%)
   plannedHeadcount: number;
   activeHeadcount: number;
-  headcountGap: number; // planeado - ativo
+  headcountGap: number; // planeado - ativo (em FTE; pode ter frações)
+  sharedIn: number; // pessoas de outras equipas com uma fração nesta
   internalHeadcount: number;
   externalHeadcount: number;
   plannedInternalHeadcount: number;
@@ -249,6 +255,7 @@ export type Summary = {
     actualCents: number;
     plannedHeadcount: number;
     activeHeadcount: number;
+    sharedPeople: number; // pessoas ativas repartidas por mais de uma equipa
     internalHeadcount: number;
     externalHeadcount: number;
     plannedInternalHeadcount: number;

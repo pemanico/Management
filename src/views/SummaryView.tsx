@@ -1,5 +1,5 @@
 import type { Summary } from '../../shared/types.ts';
-import { formatBp, formatCents } from '../money.ts';
+import { formatBp, formatCents, formatHc } from '../money.ts';
 import { PRIORITY_LABEL, PROJECT_STATUS_LABEL } from './ProjectsView.tsx';
 
 const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
@@ -38,9 +38,10 @@ export function SummaryView({ summary }: { summary: Summary }) {
       <dl className="kpis">
         {hasMoney && <div className="card"><dt>Budget total</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
         {hasMoney && <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
-        <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
-        <div className="card"><dt>Internos ativos / orçamentados</dt><dd>{totals.internalHeadcount} / {totals.plannedInternalHeadcount}</dd></div>
-        <div className="card"><dt>Externos ativos / orçamentados</dt><dd>{totals.externalHeadcount} / {totals.plannedExternalHeadcount}</dd></div>
+        <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {formatHc(totals.plannedHeadcount)}</dd></div>
+        <div className="card"><dt>Internos ativos / orçamentados</dt><dd>{totals.internalHeadcount} / {formatHc(totals.plannedInternalHeadcount)}</dd></div>
+        <div className="card"><dt>Externos ativos / orçamentados</dt><dd>{totals.externalHeadcount} / {formatHc(totals.plannedExternalHeadcount)}</dd></div>
+        <div className="card"><dt>Pessoas repartidas por equipas</dt><dd>{totals.sharedPeople}</dd></div>
         <div className="card"><dt>Custo de externos / mês</dt><dd>{formatCents(totals.externalMonthlyCostCents)}</dd></div>
         <div className="card"><dt>Custo de externos / ano</dt><dd>{formatCents(totals.externalAnnualCostCents)}</dd></div>
         <div className="card"><dt>Formações em aberto</dt><dd>{training.openCount}</dd></div>
@@ -105,6 +106,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
       )}
 
       <h3>Por equipa</h3>
+      <p className="muted-text">Headcount e custo contam por fração: uma pessoa repartida 50/50 vale 0,5 em cada equipa. Skills, objetivos e alocação contam só na equipa principal.</p>
       {teams.length === 0 ? (
         <p className="empty">Ainda não há equipas. Começa no separador Equipas.</p>
       ) : (
@@ -133,10 +135,11 @@ export function SummaryView({ summary }: { summary: Summary }) {
                 <tr key={t.teamId}>
                   <th scope="row">{t.name}</th>
                   <td className="num">
-                    {t.activeHeadcount} / {t.plannedHeadcount}
+                    {formatHc(t.activeHeadcount)} / {formatHc(t.plannedHeadcount)}
                     {t.headcountGap !== 0 && (
-                      <span className="flag"> {t.headcountGap > 0 ? `${t.headcountGap} vaga(s)` : `+${-t.headcountGap} acima`}</span>
+                      <span className="flag"> {t.headcountGap > 0 ? `${formatHc(t.headcountGap)} vaga(s)` : `+${formatHc(-t.headcountGap)} acima`}</span>
                     )}
+                    {t.sharedIn > 0 && <span className="muted-text"> ({t.sharedIn} partilhada(s))</span>}
                   </td>
                   {hasMoney && <td className="num">{formatCents(t.budgetCents)}</td>}
                   {hasMoney && <td className="num">{formatCents(t.actualCents)}</td>}
@@ -147,11 +150,11 @@ export function SummaryView({ summary }: { summary: Summary }) {
                     </td>
                   )}
                   <td className="num">
-                    {t.internalHeadcount} / {t.plannedInternalHeadcount}
+                    {formatHc(t.internalHeadcount)} / {formatHc(t.plannedInternalHeadcount)}
                     {t.internalHeadcount !== t.plannedInternalHeadcount && <span className="flag"> ▲</span>}
                   </td>
                   <td className="num">
-                    {t.externalHeadcount} / {t.plannedExternalHeadcount}
+                    {formatHc(t.externalHeadcount)} / {formatHc(t.plannedExternalHeadcount)}
                     {t.externalHeadcount !== t.plannedExternalHeadcount && <span className="flag"> ▲</span>}
                   </td>
                   <td className="num">{formatCents(t.avgCostRateCentsPerDay)}</td>

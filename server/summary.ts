@@ -38,6 +38,15 @@ function pct(bp: number): string {
 }
 
 const fte = (allocatedPct: number) => (allocatedPct / 100).toFixed(1).replace('.', ',');
+// Headcount em centésimos -> texto pt (2,5; 0,25; 3)
+const hcText = (c: number) => String(c / 100).replace('.', ',');
+/** Fração (0–100) de uma pessoa numa equipa: a principal fica com o resto das outras. */
+const shareIn = (c: Consultant, teamId: number): number =>
+  c.teamId === teamId
+    ? 100 - c.extraTeams.reduce((a, x) => a + x.pct, 0)
+    : (c.extraTeams.find((x) => x.teamId === teamId)?.pct ?? 0);
+// Soma headcounts fracionários em centésimos inteiros (evita 0.1 + 0.2).
+const sumHc = (xs: number[]) => xs.reduce((a, x) => a + Math.round(x * 100), 0) / 100;
 const isOpenProject = (p: Project) => p.status !== 'done';
 const isOpenTraining = (t: Training) => t.status === 'planned' || t.status === 'in_progress';
 
@@ -87,11 +96,20 @@ export function buildSummary(
     const expiring = members.filter(
       (c) => c.contractEnd !== null && c.contractEnd >= today && c.contractEnd <= limit,
     );
-    const gap = t.plannedHeadcount - members.length;
-    const externalDaily = externals.reduce((a, c) => a + c.costRateCentsPerDay, 0);
-    const internalCount = members.length - externals.length;
-    const gapInternal = t.plannedInternalHeadcount - internalCount;
-    const gapExternal = t.plannedExternalHeadcount - externals.length;
+    // Headcount e custo por fração (centésimos de FTE): inclui partes de pessoas cuja equipa principal é outra.
+    const sharers = consultants
+      .filter((c) => c.status === 'active')
+      .map((c) => ({ c, pct: shareIn(c, t.id) }))
+      .filter((x) => x.pct > 0);
+    const internalC = sharers.filter((x) => x.c.kind === 'internal').reduce((a, x) => a + x.pct, 0);
+    const externalC = sharers.filter((x) => x.c.kind === 'external').reduce((a, x) => a + x.pct, 0);
+    const plannedInternalC = Math.round(t.plannedInternalHeadcount * 100);
+    const plannedExternalC = Math.round(t.plannedExternalHeadcount * 100);
+    const gapInternal = plannedInternalC - internalC;
+    const gapExternal = plannedExternalC - externalC;
+    const externalDaily = Math.round(
+      sharers.filter((x) => x.c.kind === 'external').reduce((a, x) => a + x.c.costRateCentsPerDay * x.pct, 0) / 100,
+    );
 
     const openProjects = projects.filter((p) => p.teamId === t.id && isOpenProject(p));
     const projectBudget = openProjects.reduce((a, p) => a + p.budgetCents, 0);
@@ -102,16 +120,16 @@ export function buildSummary(
       alerts.push({ type: 'budget_over_90', scope: t.name, message: `Budget consumido: ${pct(utilisationBp)}.` });
     // Vagas e excessos avaliados por tipo: o total pode bater certo com externos a mais e internos a menos.
     const kinds = [
-      ['interno(s)', gapInternal, t.plannedInternalHeadcount],
-      ['externo(s)', gapExternal, t.plannedExternalHeadcount],
+      ['interno(s)', gapInternal, plannedInternalC],
+      ['externo(s)', gapExternal, plannedExternalC],
     ] as const;
     for (const [label, g, planned] of kinds) {
-      if (g > 0) alerts.push({ type: 'vacancies', scope: t.name, message: `${g} vaga(s) de ${label} por preencher.` });
+      if (g > 0) alerts.push({ type: 'vacancies', scope: t.name, message: `${hcText(g)} vaga(s) de ${label} por preencher.` });
       if (g < 0)
         alerts.push({
           type: 'over_headcount',
           scope: t.name,
-          message: `${-g} ${label} acima do orçamentado (${planned}).`,
+          message: `${hcText(-g)} ${label} acima do orçamentado (${hcText(planned)}).`,
         });
     }
     for (const c of externals.filter((m) => m.supplier === null))
@@ -223,10 +241,11 @@ export function buildSummary(
       remainingCents: t.budgetCents - t.actualCents,
       utilisationBp,
       plannedHeadcount: t.plannedHeadcount,
-      activeHeadcount: members.length,
-      headcountGap: gap,
-      internalHeadcount: internalCount,
-      externalHeadcount: externals.length,
+      activeHeadcount: (internalC + externalC) / 100,
+      headcountGap: (gapInternal + gapExternal) / 100,
+      sharedIn: sharers.filter((x) => x.c.teamId !== t.id).length,
+      internalHeadcount: internalC / 100,
+      externalHeadcount: externalC / 100,
       plannedInternalHeadcount: t.plannedInternalHeadcount,
       plannedExternalHeadcount: t.plannedExternalHeadcount,
       externalMonthlyCostCents: externalDaily * WORK_DAYS_PER_MONTH,
@@ -350,7 +369,9 @@ export function buildSummary(
     }));
 
   // ---- Fornecedores (só externos ativos) ----
-  const activeExternals = consultants.filter((c) => c.status === 'active' && c.kind === 'external');
+  const activePeople = consultants.filter((c) => c.status === 'active');
+  const activeExternals = activePeople.filter((c) => c.kind === 'external');
+  const externalDailyTotal = activeExternals.reduce((a, c) => a + c.costRateCentsPerDay, 0);
   const bySupplier = new Map<string, { name: string; people: Consultant[] }>();
   for (const c of activeExternals) {
     if (c.supplier === null) continue;
@@ -377,14 +398,16 @@ export function buildSummary(
     totals: {
       budgetCents: teams.reduce((a, t) => a + t.budgetCents, 0),
       actualCents: teams.reduce((a, t) => a + t.actualCents, 0),
-      plannedHeadcount: teams.reduce((a, t) => a + t.plannedHeadcount, 0),
-      activeHeadcount: teamSummaries.reduce((a, t) => a + t.activeHeadcount, 0),
-      internalHeadcount: teamSummaries.reduce((a, t) => a + t.internalHeadcount, 0),
-      externalHeadcount: teamSummaries.reduce((a, t) => a + t.externalHeadcount, 0),
-      plannedInternalHeadcount: teams.reduce((a, t) => a + t.plannedInternalHeadcount, 0),
-      plannedExternalHeadcount: teams.reduce((a, t) => a + t.plannedExternalHeadcount, 0),
-      externalMonthlyCostCents: teamSummaries.reduce((a, t) => a + t.externalMonthlyCostCents, 0),
-      externalAnnualCostCents: teamSummaries.reduce((a, t) => a + t.externalAnnualCostCents, 0),
+      plannedHeadcount: sumHc(teams.map((t) => t.plannedHeadcount)),
+      // Totais contam pessoas (cada uma soma 100 % entre as suas equipas): sem erros de arredondamento.
+      activeHeadcount: activePeople.length,
+      sharedPeople: activePeople.filter((c) => c.extraTeams.length > 0).length,
+      internalHeadcount: activePeople.length - activeExternals.length,
+      externalHeadcount: activeExternals.length,
+      plannedInternalHeadcount: sumHc(teams.map((t) => t.plannedInternalHeadcount)),
+      plannedExternalHeadcount: sumHc(teams.map((t) => t.plannedExternalHeadcount)),
+      externalMonthlyCostCents: externalDailyTotal * WORK_DAYS_PER_MONTH,
+      externalAnnualCostCents: externalDailyTotal * WORK_DAYS_PER_MONTH * WORK_MONTHS_PER_YEAR,
       openProjects: projects.filter(isOpenProject).length,
     },
     teams: teamSummaries,
