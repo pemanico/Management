@@ -22,12 +22,16 @@ export type TeamInput = {
 
 export type Team = TeamInput & { id: number; updatedAt: string };
 
+export const CONSULTANT_KINDS = ['internal', 'external'] as const;
+export type ConsultantKind = (typeof CONSULTANT_KINDS)[number];
+
 export type ConsultantInput = {
   code: string; // código pseudónimo (ex.: C001), nunca o nome real
   teamId: number;
   profile: string;
   seniority: Seniority;
-  costRateCentsPerDay: number;
+  kind: ConsultantKind; // interno (sem rate nem salário registados) ou externo (com rate)
+  costRateCentsPerDay: number; // só externos; 0 nos internos = não aplicável
   billRateCentsPerDay: number | null;
   contractEnd: string | null; // YYYY-MM-DD
   status: Status;
@@ -141,7 +145,7 @@ export type Alert = {
     | 'vacancies'
     | 'over_headcount'
     | 'contract_expiring'
-    | 'missing_bill_rate'
+    | 'missing_cost_rate'
     | 'stale_data'
     | 'project_at_risk'
     | 'project_overdue'
@@ -172,6 +176,8 @@ export type TeamSummary = {
   plannedHeadcount: number;
   activeHeadcount: number;
   headcountGap: number; // planeado - ativo
+  internalHeadcount: number;
+  externalHeadcount: number;
   avgCostRateCentsPerDay: number | null;
   avgBillRateCentsPerDay: number | null;
   marginBp: number | null;
@@ -223,6 +229,8 @@ export type Summary = {
     actualCents: number;
     plannedHeadcount: number;
     activeHeadcount: number;
+    internalHeadcount: number;
+    externalHeadcount: number;
     openProjects: number;
   };
   teams: TeamSummary[];

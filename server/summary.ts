@@ -77,8 +77,10 @@ export function buildSummary(
 
   const teamSummaries: TeamSummary[] = teams.map((t) => {
     const members = consultants.filter((c) => c.teamId === t.id && c.status === 'active');
-    const withBill = members.filter((c) => c.billRateCentsPerDay !== null);
-    const avgCost = avgRounded(members.map((c) => c.costRateCentsPerDay));
+    // Rates só existem para externos; os internos não entram em médias nem em alertas de rate.
+    const externals = members.filter((c) => c.kind === 'external');
+    const withBill = externals.filter((c) => c.billRateCentsPerDay !== null);
+    const avgCost = avgRounded(externals.filter((c) => c.costRateCentsPerDay > 0).map((c) => c.costRateCentsPerDay));
     const avgBill = avgRounded(withBill.map((c) => c.billRateCentsPerDay ?? 0));
     const avgCostOfBilled = avgRounded(withBill.map((c) => c.costRateCentsPerDay));
     const marginBp =
@@ -108,8 +110,8 @@ export function buildSummary(
       });
     for (const c of expiring)
       alerts.push({ type: 'contract_expiring', scope: `${t.name} / ${c.code}`, message: `Contrato termina a ${c.contractEnd}.` });
-    for (const c of members.filter((m) => m.billRateCentsPerDay === null))
-      alerts.push({ type: 'missing_bill_rate', scope: `${t.name} / ${c.code}`, message: 'Sem rate faturada registada.' });
+    for (const c of externals.filter((m) => m.costRateCentsPerDay === 0))
+      alerts.push({ type: 'missing_cost_rate', scope: `${t.name} / ${c.code}`, message: 'Externo sem rate registada.' });
     if (Date.parse(t.updatedAt) < staleBefore)
       alerts.push({
         type: 'stale_data',
@@ -215,6 +217,8 @@ export function buildSummary(
       plannedHeadcount: t.plannedHeadcount,
       activeHeadcount: members.length,
       headcountGap: gap,
+      internalHeadcount: members.length - externals.length,
+      externalHeadcount: externals.length,
       avgCostRateCentsPerDay: avgCost,
       avgBillRateCentsPerDay: avgBill,
       marginBp,
@@ -343,6 +347,8 @@ export function buildSummary(
       actualCents: teams.reduce((a, t) => a + t.actualCents, 0),
       plannedHeadcount: teams.reduce((a, t) => a + t.plannedHeadcount, 0),
       activeHeadcount: teamSummaries.reduce((a, t) => a + t.activeHeadcount, 0),
+      internalHeadcount: teamSummaries.reduce((a, t) => a + t.internalHeadcount, 0),
+      externalHeadcount: teamSummaries.reduce((a, t) => a + t.externalHeadcount, 0),
       openProjects: projects.filter(isOpenProject).length,
     },
     teams: teamSummaries,

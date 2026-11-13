@@ -1,5 +1,7 @@
 import { businessDate } from '../shared/dates.ts';
 import {
+  CONSULTANT_KINDS,
+  type ConsultantKind,
   EVALUATION_STATUSES,
   OBJECTIVE_STATUSES,
   PERIOD_RE,
@@ -78,10 +80,17 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
   if (!SENIORITIES.includes(body.seniority as Seniority))
     return { ok: false, error: 'Senioridade inválida.' };
   if (!STATUSES.includes(body.status as Status)) return { ok: false, error: 'Estado inválido.' };
-  const cost = intIn(body.costRateCentsPerDay, 0, MAX_CENTS);
-  if (cost === null) return { ok: false, error: 'Rate paga inválida.' };
+  if (!CONSULTANT_KINDS.includes(body.kind as ConsultantKind))
+    return { ok: false, error: 'Tipo inválido: interno ou externo.' };
+  const external = body.kind === 'external';
+  // Internos: a app não guarda rate nem salário, mesmo que venham no pedido.
+  let cost: number | null = 0;
+  if (external) {
+    cost = intIn(body.costRateCentsPerDay, 1, MAX_CENTS);
+    if (cost === null) return { ok: false, error: 'Um consultor externo precisa de rate paga (maior que zero).' };
+  }
   let bill: number | null = null;
-  if (body.billRateCentsPerDay !== null && body.billRateCentsPerDay !== undefined) {
+  if (external && body.billRateCentsPerDay !== null && body.billRateCentsPerDay !== undefined) {
     bill = intIn(body.billRateCentsPerDay, 0, MAX_CENTS);
     if (bill === null) return { ok: false, error: 'Rate faturada inválida.' };
   }
@@ -98,6 +107,7 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
       teamId,
       profile,
       seniority: body.seniority as Seniority,
+      kind: body.kind as ConsultantKind,
       costRateCentsPerDay: cost,
       billRateCentsPerDay: bill,
       contractEnd,

@@ -7,7 +7,7 @@ const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   vacancies: 'Vagas',
   over_headcount: 'Headcount',
   contract_expiring: 'Contrato',
-  missing_bill_rate: 'Rate em falta',
+  missing_cost_rate: 'Externo sem rate',
   stale_data: 'Dados antigos',
   project_at_risk: 'Projeto em risco',
   project_overdue: 'Projeto em atraso',
@@ -38,6 +38,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
         {hasMoney && <div className="card"><dt>Budget total</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
         {hasMoney && <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
         <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
+        <div className="card"><dt>Internos / externos</dt><dd>{totals.internalHeadcount} / {totals.externalHeadcount}</dd></div>
         <div className="card"><dt>Formações em aberto</dt><dd>{training.openCount}</dd></div>
         <div className="card"><dt>Objetivos {objectives.year} atingidos / total</dt><dd>{objectives.achieved} / {objectives.total}</dd></div>
         <div className="card"><dt>Avaliações {evaluations.year} finais / em falta</dt><dd>{evaluations.finalCount} / {evaluations.missingCount}</dd></div>
@@ -72,7 +73,8 @@ export function SummaryView({ summary }: { summary: Summary }) {
                 {hasMoney && <th scope="col" className="num">Budget</th>}
                 {hasMoney && <th scope="col" className="num">Gasto</th>}
                 {hasMoney && <th scope="col" className="num">% consumido</th>}
-                <th scope="col" className="num">Rate paga média</th>
+                <th scope="col" className="num">Internos / externos</th>
+                <th scope="col" className="num">Rate paga média (externos)</th>
                 <th scope="col" className="num">Rate faturada média</th>
                 <th scope="col" className="num">Margem</th>
                 <th scope="col" className="num">Contratos a expirar (90d)</th>
@@ -99,6 +101,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
                       {t.utilisationBp !== null && t.utilisationBp >= 9000 && <span className="flag"> ▲ alto</span>}
                     </td>
                   )}
+                  <td className="num">{t.internalHeadcount} / {t.externalHeadcount}</td>
                   <td className="num">{formatCents(t.avgCostRateCentsPerDay)}</td>
                   <td className="num">{formatCents(t.avgBillRateCentsPerDay)}</td>
                   <td className="num">{formatBp(t.marginBp)}</td>

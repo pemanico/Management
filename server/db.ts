@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS consultants (
   team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE RESTRICT,
   profile TEXT NOT NULL,
   seniority TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'external',
   cost_rate_cents_per_day INTEGER NOT NULL CHECK (cost_rate_cents_per_day >= 0),
   bill_rate_cents_per_day INTEGER CHECK (bill_rate_cents_per_day IS NULL OR bill_rate_cents_per_day >= 0),
   contract_end TEXT,
@@ -156,7 +157,7 @@ const TEAM_SELECT = `SELECT id, name, budget_cents AS budgetCents, actual_cents 
   planned_headcount AS plannedHeadcount, updated_at AS updatedAt FROM teams`;
 
 const CONSULTANT_SELECT = `SELECT id, code, team_id AS teamId, profile, seniority,
-  cost_rate_cents_per_day AS costRateCentsPerDay, bill_rate_cents_per_day AS billRateCentsPerDay,
+  kind, cost_rate_cents_per_day AS costRateCentsPerDay, bill_rate_cents_per_day AS billRateCentsPerDay,
   contract_end AS contractEnd, status, updated_at AS updatedAt FROM consultants`;
 
 export function openDb(path: string) {
@@ -164,6 +165,10 @@ export function openDb(path: string) {
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   // Migração: bases criadas antes de existirem prioridade e HC por projeto.
+  // Bases antigas: todos os consultores tinham rate, por isso passam a 'external'.
+  const consultantCols = (db.prepare('PRAGMA table_info(consultants)').all() as { name: string }[]).map((c) => c.name);
+  if (!consultantCols.includes('kind'))
+    db.exec("ALTER TABLE consultants ADD COLUMN kind TEXT NOT NULL DEFAULT 'external'");
   const projectCols = (db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).map((c) => c.name);
   if (!projectCols.includes('priority'))
     db.exec("ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
@@ -201,14 +206,15 @@ export function openDb(path: string) {
     createConsultant: (c: ConsultantInput) => {
       const r = db
         .prepare(
-          `INSERT INTO consultants (code, team_id, profile, seniority, cost_rate_cents_per_day,
-           bill_rate_cents_per_day, contract_end, status, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO consultants (code, team_id, profile, seniority, kind, cost_rate_cents_per_day,
+           bill_rate_cents_per_day, contract_end, status, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
         )
         .run(
           c.code,
           c.teamId,
           c.profile,
           c.seniority,
+          c.kind,
           c.costRateCentsPerDay,
           c.billRateCentsPerDay,
           c.contractEnd,
@@ -221,7 +227,7 @@ export function openDb(path: string) {
       Number(
         db
           .prepare(
-            `UPDATE consultants SET code=?, team_id=?, profile=?, seniority=?, cost_rate_cents_per_day=?,
+            `UPDATE consultants SET code=?, team_id=?, profile=?, seniority=?, kind=?, cost_rate_cents_per_day=?,
              bill_rate_cents_per_day=?, contract_end=?, status=?, updated_at=? WHERE id=?`,
           )
           .run(
@@ -229,6 +235,7 @@ export function openDb(path: string) {
             c.teamId,
             c.profile,
             c.seniority,
+            c.kind,
             c.costRateCentsPerDay,
             c.billRateCentsPerDay,
             c.contractEnd,

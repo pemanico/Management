@@ -114,13 +114,14 @@ export function createApp(db: Db): Server {
         if (kind === 'consultants') {
           const teams = new Map(db.listTeams().map((t) => [t.id, t.name]));
           const csv = toCsv(
-            ['codigo', 'equipa', 'perfil', 'senioridade', 'rate_paga_dia_eur', 'rate_faturada_dia_eur', 'fim_contrato', 'estado', 'atualizado_em'],
+            ['codigo', 'equipa', 'perfil', 'senioridade', 'tipo', 'rate_paga_dia_eur', 'rate_faturada_dia_eur', 'fim_contrato', 'estado', 'atualizado_em'],
             db.listConsultants().map((c) => [
               c.code,
               teams.get(c.teamId) ?? '',
               c.profile,
               c.seniority,
-              centsToDecimal(c.costRateCentsPerDay),
+              c.kind,
+              c.kind === 'external' ? centsToDecimal(c.costRateCentsPerDay) : null,
               centsToDecimal(c.billRateCentsPerDay),
               c.contractEnd,
               c.status,

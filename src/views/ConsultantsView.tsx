@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { SENIORITIES, STATUSES, type Consultant, type Seniority, type Status, type Team } from '../../shared/types.ts';
+import { CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Seniority, type Status, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatCents, parseEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
@@ -11,6 +11,7 @@ type Form = {
   teamId: string;
   profile: string;
   seniority: Seniority;
+  kind: ConsultantKind;
   cost: string;
   bill: string;
   contractEnd: string;
@@ -19,10 +20,11 @@ type Form = {
 type Errors = Partial<Record<keyof Form, string>>;
 
 const EMPTY: Form = {
-  code: '', teamId: '', profile: '', seniority: 'pleno', cost: '', bill: '', contractEnd: '', status: 'active',
+  code: '', teamId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', bill: '', contractEnd: '', status: 'active',
 };
 
 const SENIORITY_LABEL: Record<Seniority, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sénior', lead: 'Lead' };
+const KIND_LABEL: Record<ConsultantKind, string> = { internal: 'Interno', external: 'Externo' };
 const STATUS_LABEL: Record<Status, string> = { active: 'Ativo', inactive: 'Inativo' };
 
 export function ConsultantsView({ teams, consultants, onChanged }: Props) {
@@ -52,13 +54,16 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     const next: Errors = {};
-    const costCents = parseEuroToCents(form.cost);
-    const billCents = form.bill.trim() === '' ? null : parseEuroToCents(form.bill);
+    const external = form.kind === 'external';
+    // Internos: não se regista rate nem salário.
+    const costCents = external ? parseEuroToCents(form.cost) : 0;
+    const billCents = !external || form.bill.trim() === '' ? null : parseEuroToCents(form.bill);
     if (!/^[A-Za-z0-9_-]{1,20}$/.test(form.code.trim())) next.code = 'Usa um código (ex.: C001), sem espaços nem nomes reais.';
     if (form.teamId === '') next.teamId = 'Escolhe uma equipa.';
     if (form.profile.trim() === '') next.profile = 'Indica o perfil.';
     if (costCents === null) next.cost = 'Formato inválido. Exemplo: 450,00';
-    if (form.bill.trim() !== '' && billCents === null) next.bill = 'Formato inválido. Exemplo: 650,00';
+    else if (external && costCents === 0) next.cost = 'Um externo precisa de rate maior que zero.';
+    if (external && form.bill.trim() !== '' && billCents === null) next.bill = 'Formato inválido. Exemplo: 650,00';
     setErrors(next);
     setFormError(undefined);
     if (Object.keys(next).length > 0 || costCents === null) return fail('Corrige os campos assinalados.');
@@ -71,6 +76,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
           teamId: Number(form.teamId),
           profile: form.profile.trim(),
           seniority: form.seniority,
+          kind: form.kind,
           costRateCentsPerDay: costCents,
           billRateCentsPerDay: billCents,
           contractEnd: form.contractEnd === '' ? null : form.contractEnd,
@@ -96,7 +102,8 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
       teamId: String(c.teamId),
       profile: c.profile,
       seniority: c.seniority,
-      cost: centsToInput(c.costRateCentsPerDay),
+      kind: c.kind,
+      cost: c.kind === 'external' && c.costRateCentsPerDay > 0 ? centsToInput(c.costRateCentsPerDay) : '',
       bill: c.billRateCentsPerDay === null ? '' : centsToInput(c.billRateCentsPerDay),
       contractEnd: c.contractEnd ?? '',
       status: c.status,
@@ -141,12 +148,25 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
               </select>
             )}
           </Field>
-          <Field label="Rate paga por dia (EUR)" hint="Custo para a unidade" error={errors.cost}>
-            {(c) => <input {...c} name="cost" type="text" inputMode="decimal" autoComplete="off" value={form.cost} onChange={set('cost')} />}
+          <Field label="Tipo" hint="Internos: sem rate nem salário registados">
+            {(c) => (
+              <select {...c} name="kind" value={form.kind} onChange={set('kind')}>
+                {CONSULTANT_KINDS.map((k) => (
+                  <option key={k} value={k}>{KIND_LABEL[k]}</option>
+                ))}
+              </select>
+            )}
           </Field>
-          <Field label="Rate faturada por dia (EUR)" hint="Opcional" error={errors.bill}>
-            {(c) => <input {...c} name="bill" type="text" inputMode="decimal" autoComplete="off" value={form.bill} onChange={set('bill')} />}
-          </Field>
+          {form.kind === 'external' && (
+            <>
+          <Field label="Rate paga por dia (EUR)" hint="Obrigatória para externos" error={errors.cost}>
+                {(c) => <input {...c} name="cost" type="text" inputMode="decimal" autoComplete="off" value={form.cost} onChange={set('cost')} />}
+              </Field>
+              <Field label="Rate faturada por dia (EUR)" hint="Opcional" error={errors.bill}>
+                {(c) => <input {...c} name="bill" type="text" inputMode="decimal" autoComplete="off" value={form.bill} onChange={set('bill')} />}
+              </Field>
+            </>
+          )}
           <Field label="Fim de contrato" hint="Opcional">
             {(c) => <input {...c} name="contractEnd" type="date" value={form.contractEnd} onChange={set('contractEnd')} />}
           </Field>
@@ -182,6 +202,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
                 <th scope="col">Equipa</th>
                 <th scope="col">Perfil</th>
                 <th scope="col">Senioridade</th>
+                <th scope="col">Tipo</th>
                 <th scope="col" className="num">Rate paga/dia</th>
                 <th scope="col" className="num">Rate faturada/dia</th>
                 <th scope="col">Fim contrato</th>
@@ -196,8 +217,11 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
                   <td>{teamName.get(c.teamId) ?? '—'}</td>
                   <td>{c.profile}</td>
                   <td>{SENIORITY_LABEL[c.seniority]}</td>
-                  <td className="num">{formatCents(c.costRateCentsPerDay)}</td>
-                  <td className="num">{formatCents(c.billRateCentsPerDay)}</td>
+                  <td>{KIND_LABEL[c.kind]}</td>
+                  <td className="num">
+                    {c.kind === 'internal' ? '—' : c.costRateCentsPerDay > 0 ? formatCents(c.costRateCentsPerDay) : <span className="flag">▲ em falta</span>}
+                  </td>
+                  <td className="num">{c.kind === 'internal' ? '—' : formatCents(c.billRateCentsPerDay)}</td>
                   <td>{c.contractEnd ?? '—'}</td>
                   <td>{STATUS_LABEL[c.status]}</td>
                   <td className="row-actions">
