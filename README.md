@@ -1,6 +1,6 @@
 # Gestão da Unidade
 
-App local para registar equipas, budget, headcount, consultores/rates, projetos e alocações, skill matrix, formação, e exportar um resumo para o Claude.
+App web **local e de utilizador único** para gerir uma unidade de negócio a alto nível: equipas e headcount, consultores internos e externos, fornecedores e rates, projetos e alocações, skill matrix, formação, objetivos e avaliações. Exporta um resumo agregado para análise no Claude.
 
 ## Arrancar
 
@@ -8,42 +8,36 @@ App local para registar equipas, budget, headcount, consultores/rates, projetos 
 npm install
 npm run server   # API em 127.0.0.1:3001 (SQLite em ./data/)
 npm run dev      # UI em http://127.0.0.1:5173
-npm test         # testes do backend
+npm test         # testes (node:test)
+npm run build    # typecheck estrito + build
 ```
 
-Requer Node >= 22.13 (`node -v` para ver). Usa `node:sqlite` nativo e o `--experimental-strip-types` já vem nos scripts, por isso não precisa de dependências de backend. Em Node < 22.13 o `node:sqlite` não existe: atualiza o Node.
+Requer Node >= 22.13 (usa `node:sqlite` nativo; os scripts já passam `--experimental-strip-types`).
 
-Para usar uma base de dados de teste separada:
+Base de dados de teste separada:
 
 - macOS/Linux: `DB_PATH=./data/teste.sqlite npm run server`
 - Windows (PowerShell): `$env:DB_PATH='./data/teste.sqlite'; npm run server`
 
-## Decisões
+## Documentação
 
-- Montantes sempre em cêntimos (inteiros). Input em formato PT (`1.234,56`); `1234.56` é rejeitado por ser ambíguo.
+| Ficheiro | Para quê |
+| --- | --- |
+| [docs/GUIA-DE-UTILIZACAO.md](docs/GUIA-DE-UTILIZACAO.md) | Como usar cada separador, ordem de preenchimento, lista de alertas |
+| [docs/MODELO-DE-DADOS.md](docs/MODELO-DE-DADOS.md) | Tabelas, regras de negócio, fórmulas e migrações |
+| [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Estrutura do código, API, decisões técnicas |
+| [docs/PRIVACIDADE.md](docs/PRIVACIDADE.md) | Que dados existem, o que sai da máquina e o que nunca sai |
+| [docs/AGENTES.md](docs/AGENTES.md) | Prompt mestre, os 5 agentes e como usar o export com o Claude |
+| [CLAUDE.md](CLAUDE.md) | Regras para o Claude Code quando altera este repositório |
+| [CHANGELOG.md](CHANGELOG.md) | Histórico de alterações |
+
+## Regras que não se negoceiam
+
+- **Nunca** fazer commit de `data/` nem de dados reais: o repositório é público. Testes e exemplos usam só dados fictícios.
 - Consultores identificados por código (C001), nunca por nome. A tabela código→pessoa fica fora da app.
-- API só escuta em localhost e rejeita Hosts não locais. Sem autenticação: é uma app de utilizador único.
-- Projetos a alto nível: estado, prioridade, datas e HC de que o projeto precisa. As tarefas **não** estão na app: ficam com os gestores de projeto.
-- Alocações: consultor ↔ projeto com % (100 % = 1 FTE). Só contam projetos em aberto. Alertas: consultor sem alocação (bench), sobre-alocado (> 100 %) e projeto com menos FTE do que o HC necessário. Apagar um projeto apaga as suas alocações (com confirmação). O filtro por projeto fica na URL (`#/alocacoes?projeto=1`).
-- Bases de dados antigas migram sozinhas (colunas novas nos projetos). A tabela `tasks` de versões anteriores, se existir, fica por usar e não é apagada.
-- "Hoje" (atrasos, contratos a expirar, datas de avaliação) é o dia civil em Lisboa, não UTC (`shared/dates.ts`). Timestamps de auditoria ficam em ISO UTC.
-- O budget é, antes de mais, **headcount** (`Headcount orçamentado`). Os montantes em euros (budget, gasto, budget de projetos) são opcionais: vazio = 0 = "sem budget em dinheiro". Com tudo a 0, a app esconde as colunas e os alertas de dinheiro.
-- Moeda única (EUR). Sem dependências além de React/Vite/TS.
+- Classificações de avaliação são decisão humana: a app não as calcula e o Claude não as propõe.
 
-- Skill matrix: níveis 0–4; cada avaliação é *validada* (exige evidência) ou *autoavaliação*. Os requisitos são por equipa (nível mínimo + nº mínimo de pessoas). Alerta de avaliações com mais de 365 dias. O export para o Claude leva só a cobertura agregada, nunca as avaliações individuais.
-- Formação: plano por consultor e competência (tipo, nível alvo, estado, data limite, custo opcional). Liga-se aos gaps da skill matrix: uma formação **em aberto** só conta como cobertura se levar o consultor ao nível exigido (`gapAfterTraining`). Concluir uma formação **não** altera o nível na skill matrix: essa avaliação é tua, com evidência (a app avisa quando falta atualizar). O custo em euros é opcional.
+## Por fazer
 
-- Internos e externos: cada consultor tem um tipo. Dos **internos** a app não guarda rate nem salário (o servidor descarta-os mesmo que venham no pedido). Os **externos** têm rate por dia (> 0) e fornecedor obrigatórios. Não há rate faturada nem margem: a unidade não fatura.
-- Headcount orçamentado por tipo: cada equipa tem vagas de internos e de externos em separado; vagas e excessos são alertados por tipo (o total pode bater certo com a composição errada).
-- Pessoas em várias equipas: cada consultor tem uma equipa principal e, opcionalmente, outras equipas com uma percentagem (1–99); a principal fica com o resto. Headcount e custo de externos contam **por fração** em cada equipa (o headcount orçamentado aceita decimais, ex.: 2,5); os totais da unidade contam pessoas inteiras. Skills, objetivos, alertas de contrato e alocação contam só na equipa principal. Apagar uma equipa "extra" devolve a fração à principal.
-- Fornecedores: o resumo agrupa os externos ativos por fornecedor (ignora maiúsculas/minúsculas): peso, rate média, custo e contratos a expirar em 90 dias.
-- Custo de externos: rate diária × 20 dias × 11 meses (220 dias/ano), a 100 % (ignora a % de alocação). As constantes estão em `shared/types.ts`.
-- Migração de bases antigas: todos os consultores passam a "externo" sem fornecedor e o headcount orçamentado passa todo para externos. Corrige em Equipas e Consultores; a app alerta os externos sem fornecedor. A coluna antiga da rate faturada fica na base de dados sem ser usada.
-- Objetivos: por consultor **ou** por equipa (nunca ambos), com período (`2026`, `2026-H1`, `2026-H2`), estado, progresso e data limite. "Atingido" exige 100 %.
-- Avaliações: uma por consultor e período; classificação 1–4 **atribuída por ti** (a app nunca a calcula nem sugere). Uma avaliação final exige resumo com a evidência; rascunhos não. Datas futuras são recusadas.
-- Privacidade: objetivos, notas e resumos de avaliação ficam só na base de dados local. O resumo enviado ao Claude contém apenas agregados (contagens, progresso médio por equipa); há testes que garantem que não vaza texto nem classificações individuais. O prompt mestre proíbe o Claude de propor classificações. Os CSV de objetivos/avaliações são descarregamentos locais: não os colar em ferramentas externas.
-- Alertas de avaliações em falta só aparecem a partir de outubro (antes disso o ciclo ainda decorre).
-
-## Próximos módulos
-
-A exportação (backup/restauro e formatos para o Claude).
+- Exportação: backup e restauro da base de dados.
+- Aviso de alterações por guardar nos formulários; lint; testes de componentes.
