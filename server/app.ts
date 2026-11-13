@@ -99,13 +99,14 @@ export function createApp(db: Db): Server {
         const kind = url.searchParams.get('kind');
         if (kind === 'teams') {
           const csv = toCsv(
-            ['id', 'equipa', 'budget_eur', 'gasto_eur', 'headcount_planeado', 'atualizado_em'],
+            ['id', 'equipa', 'budget_eur', 'gasto_eur', 'hc_orcamentado_internos', 'hc_orcamentado_externos', 'atualizado_em'],
             db.listTeams().map((t) => [
               t.id,
               t.name,
               centsToDecimal(t.budgetCents),
               centsToDecimal(t.actualCents),
-              t.plannedHeadcount,
+              t.plannedInternalHeadcount,
+              t.plannedExternalHeadcount,
               t.updatedAt,
             ]),
           );
@@ -114,15 +115,15 @@ export function createApp(db: Db): Server {
         if (kind === 'consultants') {
           const teams = new Map(db.listTeams().map((t) => [t.id, t.name]));
           const csv = toCsv(
-            ['codigo', 'equipa', 'perfil', 'senioridade', 'tipo', 'rate_paga_dia_eur', 'rate_faturada_dia_eur', 'fim_contrato', 'estado', 'atualizado_em'],
+            ['codigo', 'equipa', 'perfil', 'senioridade', 'tipo', 'fornecedor', 'rate_dia_eur', 'fim_contrato', 'estado', 'atualizado_em'],
             db.listConsultants().map((c) => [
               c.code,
               teams.get(c.teamId) ?? '',
               c.profile,
               c.seniority,
               c.kind,
+              c.supplier,
               c.kind === 'external' ? centsToDecimal(c.costRateCentsPerDay) : null,
-              centsToDecimal(c.billRateCentsPerDay),
               c.contractEnd,
               c.status,
               c.updatedAt,

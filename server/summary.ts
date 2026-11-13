@@ -3,6 +3,7 @@ import type {
   Alert,
   Allocation,
   Consultant,
+  SupplierSummary,
   ConsultantAllocation,
   Evaluation,
   Objective,
@@ -22,6 +23,9 @@ const DAY_MS = 86_400_000;
 const STALE_DAYS = 30;
 const EXPIRY_DAYS = 90;
 const ASSESSMENT_OLD_DAYS = 365;
+// Concentração: um fornecedor com mais de metade dos externos (só com 4+ externos, para não alertar em unidades pequenas).
+const SUPPLIER_CONCENTRATION_BP = 5000;
+const SUPPLIER_CONCENTRATION_MIN_EXTERNALS = 4;
 // Avisos de avaliações em falta só a partir deste mês (outubro): antes disso o ciclo ainda decorre.
 const EVALUATION_ALERT_FROM_MONTH = 10;
 
@@ -79,20 +83,16 @@ export function buildSummary(
     const members = consultants.filter((c) => c.teamId === t.id && c.status === 'active');
     // Rates só existem para externos; os internos não entram em médias nem em alertas de rate.
     const externals = members.filter((c) => c.kind === 'external');
-    const withBill = externals.filter((c) => c.billRateCentsPerDay !== null);
     const avgCost = avgRounded(externals.filter((c) => c.costRateCentsPerDay > 0).map((c) => c.costRateCentsPerDay));
-    const avgBill = avgRounded(withBill.map((c) => c.billRateCentsPerDay ?? 0));
-    const avgCostOfBilled = avgRounded(withBill.map((c) => c.costRateCentsPerDay));
-    const marginBp =
-      avgBill !== null && avgBill > 0 && avgCostOfBilled !== null
-        ? Math.round(((avgBill - avgCostOfBilled) * 10_000) / avgBill)
-        : null;
     const utilisationBp =
       t.budgetCents > 0 ? Math.round((t.actualCents * 10_000) / t.budgetCents) : null;
     const expiring = members.filter(
       (c) => c.contractEnd !== null && c.contractEnd >= today && c.contractEnd <= limit,
     );
     const gap = t.plannedHeadcount - members.length;
+    const internalCount = members.length - externals.length;
+    const gapInternal = t.plannedInternalHeadcount - internalCount;
+    const gapExternal = t.plannedExternalHeadcount - externals.length;
 
     const openProjects = projects.filter((p) => p.teamId === t.id && isOpenProject(p));
     const projectBudget = openProjects.reduce((a, p) => a + p.budgetCents, 0);
@@ -101,13 +101,22 @@ export function buildSummary(
 
     if (utilisationBp !== null && utilisationBp >= 9000)
       alerts.push({ type: 'budget_over_90', scope: t.name, message: `Budget consumido: ${pct(utilisationBp)}.` });
-    if (gap > 0) alerts.push({ type: 'vacancies', scope: t.name, message: `${gap} vaga(s) por preencher.` });
-    if (gap < 0)
-      alerts.push({
-        type: 'over_headcount',
-        scope: t.name,
-        message: `${-gap} pessoa(s) acima do headcount orçamentado.`,
-      });
+    // Vagas e excessos avaliados por tipo: o total pode bater certo com externos a mais e internos a menos.
+    const kinds = [
+      ['interno(s)', gapInternal, t.plannedInternalHeadcount],
+      ['externo(s)', gapExternal, t.plannedExternalHeadcount],
+    ] as const;
+    for (const [label, g, planned] of kinds) {
+      if (g > 0) alerts.push({ type: 'vacancies', scope: t.name, message: `${g} vaga(s) de ${label} por preencher.` });
+      if (g < 0)
+        alerts.push({
+          type: 'over_headcount',
+          scope: t.name,
+          message: `${-g} ${label} acima do orçamentado (${planned}).`,
+        });
+    }
+    for (const c of externals.filter((m) => m.supplier === null))
+      alerts.push({ type: 'missing_supplier', scope: `${t.name} / ${c.code}`, message: 'Externo sem fornecedor registado.' });
     for (const c of expiring)
       alerts.push({ type: 'contract_expiring', scope: `${t.name} / ${c.code}`, message: `Contrato termina a ${c.contractEnd}.` });
     for (const c of externals.filter((m) => m.costRateCentsPerDay === 0))
@@ -217,11 +226,11 @@ export function buildSummary(
       plannedHeadcount: t.plannedHeadcount,
       activeHeadcount: members.length,
       headcountGap: gap,
-      internalHeadcount: members.length - externals.length,
+      internalHeadcount: internalCount,
       externalHeadcount: externals.length,
+      plannedInternalHeadcount: t.plannedInternalHeadcount,
+      plannedExternalHeadcount: t.plannedExternalHeadcount,
       avgCostRateCentsPerDay: avgCost,
-      avgBillRateCentsPerDay: avgBill,
-      marginBp,
       contractsExpiring90d: expiring.length,
       openProjects: openProjects.length,
       unallocatedPeople: unallocated.length,
@@ -339,6 +348,36 @@ export function buildSummary(
       projectCount: pctByConsultant.get(c.id)?.projects ?? 0,
     }));
 
+  // ---- Fornecedores (só externos ativos) ----
+  const activeExternals = consultants.filter((c) => c.status === 'active' && c.kind === 'external');
+  const bySupplier = new Map<string, { name: string; people: Consultant[] }>();
+  for (const c of activeExternals) {
+    if (c.supplier === null) continue;
+    const key = c.supplier.toLocaleLowerCase('pt-PT'); // "Acme" e "acme" são o mesmo fornecedor
+    const cur = bySupplier.get(key) ?? { name: c.supplier, people: [] };
+    cur.people.push(c);
+    bySupplier.set(key, cur);
+  }
+  const supplierSummaries: SupplierSummary[] = [...bySupplier.values()]
+    .map(({ name, people }) => ({
+      supplier: name,
+      activeHeadcount: people.length,
+      shareBp: Math.round((people.length * 10_000) / activeExternals.length),
+      avgCostRateCentsPerDay: avgRounded(people.filter((c) => c.costRateCentsPerDay > 0).map((c) => c.costRateCentsPerDay)),
+      dailyCostCents: people.reduce((a, c) => a + c.costRateCentsPerDay, 0),
+      contractsExpiring90d: people.filter((c) => c.contractEnd !== null && c.contractEnd >= today && c.contractEnd <= limit).length,
+      teams: [...new Set(people.map((c) => teamById.get(c.teamId)?.name ?? '—'))].sort(),
+    }))
+    .sort((a, b) => b.activeHeadcount - a.activeHeadcount || a.supplier.localeCompare(b.supplier, 'pt-PT'));
+  if (activeExternals.length >= SUPPLIER_CONCENTRATION_MIN_EXTERNALS)
+    for (const sup of supplierSummaries)
+      if (sup.shareBp > SUPPLIER_CONCENTRATION_BP)
+        alerts.push({
+          type: 'supplier_concentration',
+          scope: sup.supplier,
+          message: `${sup.activeHeadcount} de ${activeExternals.length} externos (${pct(sup.shareBp)}) vêm deste fornecedor.`,
+        });
+
   return {
     generatedAt: now.toISOString(),
     currency: 'EUR',
@@ -349,9 +388,12 @@ export function buildSummary(
       activeHeadcount: teamSummaries.reduce((a, t) => a + t.activeHeadcount, 0),
       internalHeadcount: teamSummaries.reduce((a, t) => a + t.internalHeadcount, 0),
       externalHeadcount: teamSummaries.reduce((a, t) => a + t.externalHeadcount, 0),
+      plannedInternalHeadcount: teams.reduce((a, t) => a + t.plannedInternalHeadcount, 0),
+      plannedExternalHeadcount: teams.reduce((a, t) => a + t.plannedExternalHeadcount, 0),
       openProjects: projects.filter(isOpenProject).length,
     },
     teams: teamSummaries,
+    suppliers: supplierSummaries,
     projects: projectSummaries,
     allocations: allocationSummaries,
     skills: {

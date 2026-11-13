@@ -60,12 +60,14 @@ export function parseTeam(body: unknown): Result<TeamInput> {
   const name = text(body.name, 80);
   const budgetCents = intIn(body.budgetCents, 0, MAX_CENTS);
   const actualCents = intIn(body.actualCents, 0, MAX_CENTS);
-  const plannedHeadcount = intIn(body.plannedHeadcount, 0, 10_000);
+  const plannedInternalHeadcount = intIn(body.plannedInternalHeadcount, 0, 10_000);
+  const plannedExternalHeadcount = intIn(body.plannedExternalHeadcount, 0, 10_000);
   if (name === null) return { ok: false, error: 'Nome da equipa inválido (1–80 caracteres).' };
   if (budgetCents === null) return { ok: false, error: 'Budget inválido.' };
   if (actualCents === null) return { ok: false, error: 'Gasto real inválido.' };
-  if (plannedHeadcount === null) return { ok: false, error: 'Headcount planeado inválido.' };
-  return { ok: true, value: { name, budgetCents, actualCents, plannedHeadcount } };
+  if (plannedInternalHeadcount === null) return { ok: false, error: 'Headcount orçamentado de internos inválido.' };
+  if (plannedExternalHeadcount === null) return { ok: false, error: 'Headcount orçamentado de externos inválido.' };
+  return { ok: true, value: { name, budgetCents, actualCents, plannedInternalHeadcount, plannedExternalHeadcount } };
 }
 
 export function parseConsultant(body: unknown): Result<ConsultantInput> {
@@ -89,10 +91,10 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
     cost = intIn(body.costRateCentsPerDay, 1, MAX_CENTS);
     if (cost === null) return { ok: false, error: 'Um consultor externo precisa de rate paga (maior que zero).' };
   }
-  let bill: number | null = null;
-  if (external && body.billRateCentsPerDay !== null && body.billRateCentsPerDay !== undefined) {
-    bill = intIn(body.billRateCentsPerDay, 0, MAX_CENTS);
-    if (bill === null) return { ok: false, error: 'Rate faturada inválida.' };
+  let supplier: string | null = null;
+  if (external) {
+    supplier = text(body.supplier, 60);
+    if (supplier === null) return { ok: false, error: 'Um consultor externo precisa de fornecedor (1–60 caracteres).' };
   }
   let contractEnd: string | null = null;
   if (body.contractEnd !== null && body.contractEnd !== undefined && body.contractEnd !== '') {
@@ -109,7 +111,7 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
       seniority: body.seniority as Seniority,
       kind: body.kind as ConsultantKind,
       costRateCentsPerDay: cost,
-      billRateCentsPerDay: bill,
+      supplier,
       contractEnd,
       status: body.status as Status,
     },

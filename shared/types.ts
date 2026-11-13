@@ -17,10 +17,12 @@ export type TeamInput = {
   name: string;
   budgetCents: number;
   actualCents: number;
-  plannedHeadcount: number;
+  plannedInternalHeadcount: number; // budget em pessoas: vagas de internos
+  plannedExternalHeadcount: number; // budget em pessoas: vagas de externos
 };
 
-export type Team = TeamInput & { id: number; updatedAt: string };
+// plannedHeadcount = internos + externos (calculado pelo servidor)
+export type Team = TeamInput & { id: number; plannedHeadcount: number; updatedAt: string };
 
 export const CONSULTANT_KINDS = ['internal', 'external'] as const;
 export type ConsultantKind = (typeof CONSULTANT_KINDS)[number];
@@ -32,7 +34,7 @@ export type ConsultantInput = {
   seniority: Seniority;
   kind: ConsultantKind; // interno (sem rate nem salário registados) ou externo (com rate)
   costRateCentsPerDay: number; // só externos; 0 nos internos = não aplicável
-  billRateCentsPerDay: number | null;
+  supplier: string | null; // empresa que coloca o externo; null nos internos
   contractEnd: string | null; // YYYY-MM-DD
   status: Status;
 };
@@ -146,6 +148,8 @@ export type Alert = {
     | 'over_headcount'
     | 'contract_expiring'
     | 'missing_cost_rate'
+    | 'missing_supplier'
+    | 'supplier_concentration'
     | 'stale_data'
     | 'project_at_risk'
     | 'project_overdue'
@@ -178,9 +182,9 @@ export type TeamSummary = {
   headcountGap: number; // planeado - ativo
   internalHeadcount: number;
   externalHeadcount: number;
+  plannedInternalHeadcount: number;
+  plannedExternalHeadcount: number;
   avgCostRateCentsPerDay: number | null;
-  avgBillRateCentsPerDay: number | null;
-  marginBp: number | null;
   contractsExpiring90d: number;
   openProjects: number;
   unallocatedPeople: number; // ativos com 0% alocado
@@ -200,6 +204,16 @@ export type ProjectSummary = {
   allocatedPeople: number;
   allocatedPct: number; // soma das alocações (100 = 1 FTE)
   gapPct: number; // max(0, plannedHeadcount*100 - allocatedPct)
+};
+
+export type SupplierSummary = {
+  supplier: string;
+  activeHeadcount: number;
+  shareBp: number; // peso no total de externos ativos
+  avgCostRateCentsPerDay: number | null;
+  dailyCostCents: number; // soma das rates/dia dos externos ativos deste fornecedor
+  contractsExpiring90d: number;
+  teams: string[];
 };
 
 export type ConsultantAllocation = {
@@ -231,9 +245,12 @@ export type Summary = {
     activeHeadcount: number;
     internalHeadcount: number;
     externalHeadcount: number;
+    plannedInternalHeadcount: number;
+    plannedExternalHeadcount: number;
     openProjects: number;
   };
   teams: TeamSummary[];
+  suppliers: SupplierSummary[];
   projects: ProjectSummary[];
   allocations: ConsultantAllocation[];
   skills: {

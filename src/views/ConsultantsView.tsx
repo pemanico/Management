@@ -13,14 +13,14 @@ type Form = {
   seniority: Seniority;
   kind: ConsultantKind;
   cost: string;
-  bill: string;
+  supplier: string;
   contractEnd: string;
   status: Status;
 };
 type Errors = Partial<Record<keyof Form, string>>;
 
 const EMPTY: Form = {
-  code: '', teamId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', bill: '', contractEnd: '', status: 'active',
+  code: '', teamId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', supplier: '', contractEnd: '', status: 'active',
 };
 
 const SENIORITY_LABEL: Record<Seniority, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sénior', lead: 'Lead' };
@@ -35,6 +35,8 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
   const [saving, setSaving] = useState(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const teamName = new Map(teams.map((t) => [t.id, t.name]));
+  // Sugestões no campo Fornecedor: evita o mesmo fornecedor escrito de duas maneiras.
+  const suppliers = [...new Set(consultants.map((c) => c.supplier).filter((n): n is string => n !== null))].sort();
 
   const set = (k: keyof Form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -57,13 +59,13 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
     const external = form.kind === 'external';
     // Internos: não se regista rate nem salário.
     const costCents = external ? parseEuroToCents(form.cost) : 0;
-    const billCents = !external || form.bill.trim() === '' ? null : parseEuroToCents(form.bill);
+    const supplier = external ? form.supplier.trim() : '';
     if (!/^[A-Za-z0-9_-]{1,20}$/.test(form.code.trim())) next.code = 'Usa um código (ex.: C001), sem espaços nem nomes reais.';
     if (form.teamId === '') next.teamId = 'Escolhe uma equipa.';
     if (form.profile.trim() === '') next.profile = 'Indica o perfil.';
     if (costCents === null) next.cost = 'Formato inválido. Exemplo: 450,00';
     else if (external && costCents === 0) next.cost = 'Um externo precisa de rate maior que zero.';
-    if (external && form.bill.trim() !== '' && billCents === null) next.bill = 'Formato inválido. Exemplo: 650,00';
+    if (external && (supplier === '' || supplier.length > 60)) next.supplier = 'Indica o fornecedor (máx. 60 caracteres).';
     setErrors(next);
     setFormError(undefined);
     if (Object.keys(next).length > 0 || costCents === null) return fail('Corrige os campos assinalados.');
@@ -78,7 +80,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
           seniority: form.seniority,
           kind: form.kind,
           costRateCentsPerDay: costCents,
-          billRateCentsPerDay: billCents,
+          supplier: external ? supplier : null,
           contractEnd: form.contractEnd === '' ? null : form.contractEnd,
           status: form.status,
         },
@@ -104,7 +106,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
       seniority: c.seniority,
       kind: c.kind,
       cost: c.kind === 'external' && c.costRateCentsPerDay > 0 ? centsToInput(c.costRateCentsPerDay) : '',
-      bill: c.billRateCentsPerDay === null ? '' : centsToInput(c.billRateCentsPerDay),
+      supplier: c.supplier ?? '',
       contractEnd: c.contractEnd ?? '',
       status: c.status,
     });
@@ -159,12 +161,15 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
           </Field>
           {form.kind === 'external' && (
             <>
-          <Field label="Rate paga por dia (EUR)" hint="Obrigatória para externos" error={errors.cost}>
+              <Field label="Fornecedor" hint="Empresa que coloca o consultor" error={errors.supplier}>
+                {(c) => <input {...c} name="supplier" type="text" list="supplier-options" autoComplete="off" value={form.supplier} onChange={set('supplier')} />}
+              </Field>
+              <Field label="Rate por dia (EUR)" hint="Obrigatória para externos" error={errors.cost}>
                 {(c) => <input {...c} name="cost" type="text" inputMode="decimal" autoComplete="off" value={form.cost} onChange={set('cost')} />}
               </Field>
-              <Field label="Rate faturada por dia (EUR)" hint="Opcional" error={errors.bill}>
-                {(c) => <input {...c} name="bill" type="text" inputMode="decimal" autoComplete="off" value={form.bill} onChange={set('bill')} />}
-              </Field>
+              <datalist id="supplier-options">
+                {suppliers.map((n) => <option key={n} value={n} />)}
+              </datalist>
             </>
           )}
           <Field label="Fim de contrato" hint="Opcional">
@@ -203,8 +208,8 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
                 <th scope="col">Perfil</th>
                 <th scope="col">Senioridade</th>
                 <th scope="col">Tipo</th>
-                <th scope="col" className="num">Rate paga/dia</th>
-                <th scope="col" className="num">Rate faturada/dia</th>
+                <th scope="col">Fornecedor</th>
+                <th scope="col" className="num">Rate/dia</th>
                 <th scope="col">Fim contrato</th>
                 <th scope="col">Estado</th>
                 <th scope="col"><span className="sr-only">Ações</span></th>
@@ -218,10 +223,10 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
                   <td>{c.profile}</td>
                   <td>{SENIORITY_LABEL[c.seniority]}</td>
                   <td>{KIND_LABEL[c.kind]}</td>
+                  <td>{c.kind === 'internal' ? '—' : (c.supplier ?? <span className="flag">▲ em falta</span>)}</td>
                   <td className="num">
                     {c.kind === 'internal' ? '—' : c.costRateCentsPerDay > 0 ? formatCents(c.costRateCentsPerDay) : <span className="flag">▲ em falta</span>}
                   </td>
-                  <td className="num">{c.kind === 'internal' ? '—' : formatCents(c.billRateCentsPerDay)}</td>
                   <td>{c.contractEnd ?? '—'}</td>
                   <td>{STATUS_LABEL[c.status]}</td>
                   <td className="row-actions">

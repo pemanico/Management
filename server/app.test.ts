@@ -26,19 +26,19 @@ async function setup() {
 test('fluxo equipa + consultores + resumo (inteiros, sem float)', async () => {
   const { call, close } = await setup();
   const team = await call('/api/teams', 'POST', {
-    name: 'Equipa Alfa', budgetCents: 100_000_00, actualCents: 95_000_00, plannedHeadcount: 3,
+    name: 'Equipa Alfa', budgetCents: 100_000_00, actualCents: 95_000_00, plannedInternalHeadcount: 0, plannedExternalHeadcount: 3,
   });
   assert.equal(team.status, 201);
   const teamId = (team.data as { id: number }).id;
 
   const c1 = await call('/api/consultants', 'POST', {
     code: 'C001', teamId, profile: 'Data Engineer', seniority: 'senior',
-    kind: 'external', costRateCentsPerDay: 400_00, billRateCentsPerDay: 600_00, contractEnd: null, status: 'active',
+    kind: 'external', costRateCentsPerDay: 400_00, supplier: 'Fornecedor A', contractEnd: null, status: 'active',
   });
   assert.equal(c1.status, 201);
   await call('/api/consultants', 'POST', {
     code: 'C002', teamId, profile: 'QA', seniority: 'pleno',
-    kind: 'external', costRateCentsPerDay: 300_00, billRateCentsPerDay: null, contractEnd: '2999-01-01', status: 'active',
+    kind: 'external', costRateCentsPerDay: 300_00, supplier: 'Fornecedor A', contractEnd: '2999-01-01', status: 'active',
   });
 
   const s = (await call('/api/summary')).data as any;
@@ -46,7 +46,6 @@ test('fluxo equipa + consultores + resumo (inteiros, sem float)', async () => {
   assert.equal(t.utilisationBp, 9500);
   assert.equal(t.activeHeadcount, 2);
   assert.equal(t.headcountGap, 1);
-  assert.equal(t.marginBp, 3333); // (600-400)/600
   const types = s.alerts.map((a: any) => a.type);
   assert.ok(types.includes('budget_over_90'));
   assert.ok(types.includes('vacancies'));
@@ -59,7 +58,7 @@ test('validação e erros genéricos', async () => {
   assert.equal(
     (await call('/api/consultants', 'POST', {
       code: 'João Silva', teamId: 1, profile: 'x', seniority: 'senior',
-      kind: 'external', costRateCentsPerDay: 1, billRateCentsPerDay: null, contractEnd: null, status: 'active',
+      kind: 'external', costRateCentsPerDay: 1, supplier: 'Fornecedor A', contractEnd: null, status: 'active',
     })).status,
     400,
   );
@@ -69,10 +68,10 @@ test('validação e erros genéricos', async () => {
 
 test('equipa com consultores não pode ser apagada', async () => {
   const { call, close } = await setup();
-  const t = (await call('/api/teams', 'POST', { name: 'B', budgetCents: 0, actualCents: 0, plannedHeadcount: 0 })).data as { id: number };
+  const t = (await call('/api/teams', 'POST', { name: 'B', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 0 })).data as { id: number };
   await call('/api/consultants', 'POST', {
     code: 'C9', teamId: t.id, profile: 'x', seniority: 'junior',
-    kind: 'external', costRateCentsPerDay: 1, billRateCentsPerDay: null, contractEnd: null, status: 'active',
+    kind: 'external', costRateCentsPerDay: 1, supplier: 'Fornecedor A', contractEnd: null, status: 'active',
   });
   assert.equal((await call(`/api/teams/${t.id}`, 'DELETE')).status, 409);
   close();
@@ -85,11 +84,11 @@ test('CSV injection é neutralizado', () => {
 
 test('skills matrix: gaps, validação e cobertura', async () => {
   const { call, close } = await setup();
-  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 1, actualCents: 0, plannedHeadcount: 2 })).data as { id: number };
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 1, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 2 })).data as { id: number };
   const mk = async (code: string) =>
     ((await call('/api/consultants', 'POST', {
       code, teamId: team.id, profile: 'x', seniority: 'pleno',
-      kind: 'external', costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
+      kind: 'external', costRateCentsPerDay: 1, supplier: 'Fornecedor A', contractEnd: null, status: 'active',
     })).data as { id: number }).id;
   const c1 = await mk('C1');
   const c2 = await mk('C2');
@@ -132,7 +131,7 @@ test('skills matrix: gaps, validação e cobertura', async () => {
 
 test('unidade só com budget em headcount: sem alertas de dinheiro', async () => {
   const { call, close } = await setup();
-  const team = (await call('/api/teams', 'POST', { name: 'H', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
+  const team = (await call('/api/teams', 'POST', { name: 'H', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 3 })).data as { id: number };
   await call('/api/projects', 'POST', {
     name: 'P', teamId: team.id, status: 'active', startDate: null, endDate: null, budgetCents: 80_000_00,
     priority: 'high', plannedHeadcount: 0,
@@ -148,11 +147,11 @@ test('unidade só com budget em headcount: sem alertas de dinheiro', async () =>
 
 test('projetos e alocações: HC, sobre-alocação, bench e cascade', async () => {
   const { call, close } = await setup();
-  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 3 })).data as { id: number };
   const mk = async (code: string) =>
     ((await call('/api/consultants', 'POST', {
       code, teamId: team.id, profile: 'x', seniority: 'pleno',
-      kind: 'external', costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
+      kind: 'external', costRateCentsPerDay: 1, supplier: 'Fornecedor A', contractEnd: null, status: 'active',
     })).data as { id: number }).id;
   const c1 = await mk('C1');
   const c2 = await mk('C2');
@@ -217,16 +216,19 @@ test('migração: base antiga sem prioridade/HC nos projetos continua a abrir', 
   const p = db.listProjects()[0]!;
   assert.equal(p.priority, 'medium');
   assert.equal(p.plannedHeadcount, 0);
+  // headcount antigo (um só número) passa a budget de externos, coerente com os consultores migrados como externos
+  const t = db.listTeams()[0]!;
+  assert.deepEqual([t.plannedHeadcount, t.plannedInternalHeadcount, t.plannedExternalHeadcount], [2, 0, 2]);
   db.close();
 });
 
 test('formação: fecha gaps, alerta quando não fecha e quando está em atraso', async () => {
   const { call, close } = await setup();
-  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 3 })).data as { id: number };
   const mk = async (code: string) =>
     ((await call('/api/consultants', 'POST', {
       code, teamId: team.id, profile: 'x', seniority: 'pleno',
-      kind: 'external', costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
+      kind: 'external', costRateCentsPerDay: 1, supplier: 'Fornecedor A', contractEnd: null, status: 'active',
     })).data as { id: number }).id;
   const [c1, c2, c3] = [await mk('C1'), await mk('C2'), await mk('C3')];
   const skill = (await call('/api/skills', 'POST', { name: 'EMIR', category: null })).data as { id: number };
@@ -280,11 +282,11 @@ test('formação: fecha gaps, alerta quando não fecha e quando está em atraso'
 
 test('objetivos e avaliações: validação, agregados e sem dados individuais no resumo', async () => {
   const { call, close } = await setup();
-  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedHeadcount: 2 })).data as { id: number };
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 2 })).data as { id: number };
   const mk = async (code: string) =>
     ((await call('/api/consultants', 'POST', {
       code, teamId: team.id, profile: 'x', seniority: 'pleno',
-      kind: 'external', costRateCentsPerDay: 1, billRateCentsPerDay: 2, contractEnd: null, status: 'active',
+      kind: 'external', costRateCentsPerDay: 1, supplier: 'Fornecedor A', contractEnd: null, status: 'active',
     })).data as { id: number }).id;
   const c1 = await mk('C1');
   const c2 = await mk('C2');
@@ -343,18 +345,18 @@ test('objetivos e avaliações: validação, agregados e sem dados individuais n
 
 test('internos não guardam rate; externos exigem rate; médias só de externos', async () => {
   const { call, close } = await setup();
-  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedHeadcount: 3 })).data as { id: number };
+  const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 3 })).data as { id: number };
   const base = { teamId: team.id, profile: 'x', seniority: 'pleno', contractEnd: null, status: 'active' };
   // interno: rate enviada é ignorada
-  const int = await call('/api/consultants', 'POST', { ...base, code: 'I1', kind: 'internal', costRateCentsPerDay: 999_00, billRateCentsPerDay: 5 });
+  const int = await call('/api/consultants', 'POST', { ...base, code: 'I1', kind: 'internal', costRateCentsPerDay: 999_00, supplier: 'Fornecedor A'});
   assert.equal(int.status, 201);
   assert.equal((int.data as any).costRateCentsPerDay, 0);
-  assert.equal((int.data as any).billRateCentsPerDay, null);
+  assert.equal((int.data as any).supplier, null);
   // externo sem rate é recusado; tipo é obrigatório
-  assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'E0', kind: 'external', costRateCentsPerDay: 0, billRateCentsPerDay: null })).status, 400);
-  assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'E0', costRateCentsPerDay: 10, billRateCentsPerDay: null })).status, 400);
-  await call('/api/consultants', 'POST', { ...base, code: 'E1', kind: 'external', costRateCentsPerDay: 400_00, billRateCentsPerDay: null });
-  await call('/api/consultants', 'POST', { ...base, code: 'E2', kind: 'external', costRateCentsPerDay: 500_00, billRateCentsPerDay: null });
+  assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'E0', kind: 'external', costRateCentsPerDay: 0, supplier: 'Fornecedor A'})).status, 400);
+  assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'E0', costRateCentsPerDay: 10, supplier: 'Fornecedor A'})).status, 400);
+  await call('/api/consultants', 'POST', { ...base, code: 'E1', kind: 'external', costRateCentsPerDay: 400_00, supplier: 'Fornecedor A'});
+  await call('/api/consultants', 'POST', { ...base, code: 'E2', kind: 'external', costRateCentsPerDay: 500_00, supplier: 'Fornecedor A'});
   const s = (await call('/api/summary')).data as any;
   assert.equal(s.totals.internalHeadcount, 1);
   assert.equal(s.totals.externalHeadcount, 2);
@@ -364,4 +366,35 @@ test('internos não guardam rate; externos exigem rate; médias só de externos'
   const csv = (await call('/api/export?kind=consultants')).data as string;
   assert.ok(/I1;T;x;pleno;internal;;;/.test(csv));
   close();
+});
+
+test('headcount por tipo, fornecedores e concentração', async () => {
+  const { call, close } = await setup();
+  try {
+    // total bate certo (3 = 3) mas a composição não: 2 internos + 1 externo orçamentados, 0 internos + 3 externos reais
+    const team = (await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 2, plannedExternalHeadcount: 1 })).data as any;
+    assert.equal(team.plannedHeadcount, 3);
+    const base = { teamId: team.id, profile: 'x', seniority: 'pleno', kind: 'external', contractEnd: null, status: 'active' };
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'E0', costRateCentsPerDay: 10 })).status, 400); // sem fornecedor
+    await call('/api/consultants', 'POST', { ...base, code: 'E1', costRateCentsPerDay: 400_00, supplier: 'Acme' });
+    await call('/api/consultants', 'POST', { ...base, code: 'E2', costRateCentsPerDay: 600_00, supplier: 'acme', contractEnd: businessDate() });
+    await call('/api/consultants', 'POST', { ...base, code: 'E3', costRateCentsPerDay: 500_00, supplier: 'Beta' });
+    let s = (await call('/api/summary')).data as any;
+    assert.equal(s.teams[0].headcountGap, 0);
+    const msgs = s.alerts.filter((a: any) => a.type === 'vacancies' || a.type === 'over_headcount').map((a: any) => a.message);
+    assert.ok(msgs.some((m: string) => m.includes('2 vaga(s) de interno')));
+    assert.ok(msgs.some((m: string) => m.includes('2 externo(s) acima')));
+    assert.equal(s.suppliers.length, 2); // Acme/acme agrupados
+    assert.deepEqual(
+      { ...s.suppliers[0] },
+      { supplier: 'Acme', activeHeadcount: 2, shareBp: 6667, avgCostRateCentsPerDay: 500_00, dailyCostCents: 1000_00, contractsExpiring90d: 1, teams: ['T'] },
+    );
+    assert.ok(!s.alerts.some((a: any) => a.type === 'supplier_concentration')); // só 3 externos: abaixo do mínimo
+    await call('/api/consultants', 'POST', { ...base, code: 'E4', costRateCentsPerDay: 500_00, supplier: 'Acme' });
+    s = (await call('/api/summary')).data as any;
+    assert.ok(s.alerts.some((a: any) => a.type === 'supplier_concentration' && a.scope === 'Acme'));
+    assert.ok(!JSON.stringify(s).includes('billRate') && !JSON.stringify(s).includes('marginBp'));
+  } finally {
+    close();
+  }
 });

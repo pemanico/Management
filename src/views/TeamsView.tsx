@@ -6,10 +6,10 @@ import { Field } from '../components/Field.tsx';
 import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 
 type Props = { teams: Team[]; onChanged: () => Promise<void> };
-type Form = { name: string; budget: string; actual: string; planned: string };
+type Form = { name: string; budget: string; actual: string; plannedInt: string; plannedExt: string };
 type Errors = Partial<Record<keyof Form, string>>;
 
-const EMPTY: Form = { name: '', budget: '', actual: '', planned: '0' };
+const EMPTY: Form = { name: '', budget: '', actual: '', plannedInt: '0', plannedExt: '0' };
 
 export function TeamsView({ teams, onChanged }: Props) {
   const [form, setForm] = useState<Form>(EMPTY);
@@ -34,11 +34,14 @@ export function TeamsView({ teams, onChanged }: Props) {
     const next: Errors = {};
     const budgetCents = parseOptionalEuroToCents(form.budget);
     const actualCents = parseOptionalEuroToCents(form.actual);
-    const planned = Number(form.planned);
+    const plannedInt = Number(form.plannedInt);
+    const plannedExt = Number(form.plannedExt);
+    const validHc = (n: number, raw: string) => raw.trim() !== '' && Number.isInteger(n) && n >= 0;
     if (form.name.trim() === '') next.name = 'Indica o nome da equipa.';
     if (budgetCents === null) next.budget = 'Formato inválido. Exemplo: 120.000,00';
     if (actualCents === null) next.actual = 'Formato inválido. Exemplo: 95.500,00';
-    if (!Number.isInteger(planned) || planned < 0) next.planned = 'Indica um número inteiro ≥ 0.';
+    if (!validHc(plannedInt, form.plannedInt)) next.plannedInt = 'Indica um número inteiro ≥ 0.';
+    if (!validHc(plannedExt, form.plannedExt)) next.plannedExt = 'Indica um número inteiro ≥ 0.';
     setErrors(next);
     setFormError(undefined);
     if (Object.keys(next).length > 0 || budgetCents === null || actualCents === null) {
@@ -49,7 +52,7 @@ export function TeamsView({ teams, onChanged }: Props) {
     setSaving(true);
     try {
       await api.saveTeam(
-        { name: form.name.trim(), budgetCents, actualCents, plannedHeadcount: planned },
+        { name: form.name.trim(), budgetCents, actualCents, plannedInternalHeadcount: plannedInt, plannedExternalHeadcount: plannedExt },
         editingId,
       );
       await onChanged();
@@ -70,7 +73,8 @@ export function TeamsView({ teams, onChanged }: Props) {
       name: t.name,
       budget: centsToInput(t.budgetCents),
       actual: centsToInput(t.actualCents),
-      planned: String(t.plannedHeadcount),
+      plannedInt: String(t.plannedInternalHeadcount),
+      plannedExt: String(t.plannedExternalHeadcount),
     });
   }
 
@@ -93,8 +97,11 @@ export function TeamsView({ teams, onChanged }: Props) {
         <Field label="Gasto real até hoje (EUR)" hint="Opcional" error={errors.actual}>
           {(c) => <input {...c} name="actual" type="text" inputMode="decimal" autoComplete="off" value={form.actual} onChange={set('actual')} />}
         </Field>
-        <Field label="Headcount orçamentado" hint="O teu budget em pessoas" error={errors.planned}>
-          {(c) => <input {...c} name="planned" type="number" inputMode="numeric" min={0} step={1} value={form.planned} onChange={set('planned')} />}
+        <Field label="Headcount orçamentado: internos" hint="Vagas de internos no teu budget" error={errors.plannedInt}>
+          {(c) => <input {...c} name="plannedInt" type="number" inputMode="numeric" min={0} step={1} value={form.plannedInt} onChange={set('plannedInt')} />}
+        </Field>
+        <Field label="Headcount orçamentado: externos" hint="Vagas de externos no teu budget" error={errors.plannedExt}>
+          {(c) => <input {...c} name="plannedExt" type="number" inputMode="numeric" min={0} step={1} value={form.plannedExt} onChange={set('plannedExt')} />}
         </Field>
         <div className="actions">
           <button type="submit" className="primary" disabled={saving}>
@@ -117,7 +124,9 @@ export function TeamsView({ teams, onChanged }: Props) {
             <thead>
               <tr>
                 <th scope="col">Equipa</th>
-                <th scope="col" className="num">Headcount orçamentado</th>
+                <th scope="col" className="num">HC orçamentado: internos</th>
+                <th scope="col" className="num">HC orçamentado: externos</th>
+                <th scope="col" className="num">Total</th>
                 <th scope="col" className="num">Budget (EUR)</th>
                 <th scope="col" className="num">Gasto real (EUR)</th>
                 <th scope="col">Atualizado</th>
@@ -128,6 +137,8 @@ export function TeamsView({ teams, onChanged }: Props) {
               {teams.map((t) => (
                 <tr key={t.id}>
                   <th scope="row">{t.name}</th>
+                  <td className="num">{t.plannedInternalHeadcount}</td>
+                  <td className="num">{t.plannedExternalHeadcount}</td>
                   <td className="num">{t.plannedHeadcount}</td>
                   <td className="num">{formatOptionalCents(t.budgetCents)}</td>
                   <td className="num">{t.budgetCents === 0 ? '—' : formatOptionalCents(t.actualCents)}</td>

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS teams (
   budget_cents INTEGER NOT NULL CHECK (budget_cents >= 0),
   actual_cents INTEGER NOT NULL CHECK (actual_cents >= 0),
   planned_headcount INTEGER NOT NULL CHECK (planned_headcount >= 0),
+  planned_external_headcount INTEGER NOT NULL DEFAULT 0 CHECK (planned_external_headcount >= 0),
   updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS consultants (
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS consultants (
   profile TEXT NOT NULL,
   seniority TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'external',
+  supplier TEXT,
   cost_rate_cents_per_day INTEGER NOT NULL CHECK (cost_rate_cents_per_day >= 0),
   bill_rate_cents_per_day INTEGER CHECK (bill_rate_cents_per_day IS NULL OR bill_rate_cents_per_day >= 0),
   contract_end TEXT,
@@ -154,10 +156,12 @@ const ALLOCATION_SELECT = `SELECT project_id AS projectId, consultant_id AS cons
   allocation_pct AS allocationPct, updated_at AS updatedAt FROM allocations`;
 
 const TEAM_SELECT = `SELECT id, name, budget_cents AS budgetCents, actual_cents AS actualCents,
-  planned_headcount AS plannedHeadcount, updated_at AS updatedAt FROM teams`;
+  planned_headcount AS plannedHeadcount,
+  planned_headcount - planned_external_headcount AS plannedInternalHeadcount,
+  planned_external_headcount AS plannedExternalHeadcount, updated_at AS updatedAt FROM teams`;
 
 const CONSULTANT_SELECT = `SELECT id, code, team_id AS teamId, profile, seniority,
-  kind, cost_rate_cents_per_day AS costRateCentsPerDay, bill_rate_cents_per_day AS billRateCentsPerDay,
+  kind, cost_rate_cents_per_day AS costRateCentsPerDay, supplier,
   contract_end AS contractEnd, status, updated_at AS updatedAt FROM consultants`;
 
 export function openDb(path: string) {
@@ -169,6 +173,14 @@ export function openDb(path: string) {
   const consultantCols = (db.prepare('PRAGMA table_info(consultants)').all() as { name: string }[]).map((c) => c.name);
   if (!consultantCols.includes('kind'))
     db.exec("ALTER TABLE consultants ADD COLUMN kind TEXT NOT NULL DEFAULT 'external'");
+  if (!consultantCols.includes('supplier')) db.exec('ALTER TABLE consultants ADD COLUMN supplier TEXT');
+  // Bases antigas: o headcount era um só número e todos os consultores migraram como externos,
+  // por isso o budget existente passa a ser de externos (coerente; corrige-se em Equipas).
+  const teamCols = (db.prepare('PRAGMA table_info(teams)').all() as { name: string }[]).map((c) => c.name);
+  if (!teamCols.includes('planned_external_headcount')) {
+    db.exec('ALTER TABLE teams ADD COLUMN planned_external_headcount INTEGER NOT NULL DEFAULT 0');
+    db.exec('UPDATE teams SET planned_external_headcount = planned_headcount');
+  }
   const projectCols = (db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).map((c) => c.name);
   if (!projectCols.includes('priority'))
     db.exec("ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
@@ -184,18 +196,18 @@ export function openDb(path: string) {
     createTeam: (t: TeamInput) => {
       const r = db
         .prepare(
-          'INSERT INTO teams (name, budget_cents, actual_cents, planned_headcount, updated_at) VALUES (?,?,?,?,?)',
+          'INSERT INTO teams (name, budget_cents, actual_cents, planned_headcount, planned_external_headcount, updated_at) VALUES (?,?,?,?,?,?)',
         )
-        .run(t.name, t.budgetCents, t.actualCents, t.plannedHeadcount, now());
+        .run(t.name, t.budgetCents, t.actualCents, t.plannedInternalHeadcount + t.plannedExternalHeadcount, t.plannedExternalHeadcount, now());
       return Number(r.lastInsertRowid);
     },
     updateTeam: (id: number, t: TeamInput) =>
       Number(
         db
           .prepare(
-            'UPDATE teams SET name=?, budget_cents=?, actual_cents=?, planned_headcount=?, updated_at=? WHERE id=?',
+            'UPDATE teams SET name=?, budget_cents=?, actual_cents=?, planned_headcount=?, planned_external_headcount=?, updated_at=? WHERE id=?',
           )
-          .run(t.name, t.budgetCents, t.actualCents, t.plannedHeadcount, now(), id).changes,
+          .run(t.name, t.budgetCents, t.actualCents, t.plannedInternalHeadcount + t.plannedExternalHeadcount, t.plannedExternalHeadcount, now(), id).changes,
       ),
     deleteTeam: (id: number) => Number(db.prepare('DELETE FROM teams WHERE id=?').run(id).changes),
 
@@ -207,7 +219,7 @@ export function openDb(path: string) {
       const r = db
         .prepare(
           `INSERT INTO consultants (code, team_id, profile, seniority, kind, cost_rate_cents_per_day,
-           bill_rate_cents_per_day, contract_end, status, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+           supplier, contract_end, status, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
         )
         .run(
           c.code,
@@ -216,7 +228,7 @@ export function openDb(path: string) {
           c.seniority,
           c.kind,
           c.costRateCentsPerDay,
-          c.billRateCentsPerDay,
+          c.supplier,
           c.contractEnd,
           c.status,
           now(),
@@ -228,7 +240,7 @@ export function openDb(path: string) {
         db
           .prepare(
             `UPDATE consultants SET code=?, team_id=?, profile=?, seniority=?, kind=?, cost_rate_cents_per_day=?,
-             bill_rate_cents_per_day=?, contract_end=?, status=?, updated_at=? WHERE id=?`,
+             supplier=?, contract_end=?, status=?, updated_at=? WHERE id=?`,
           )
           .run(
             c.code,
@@ -237,7 +249,7 @@ export function openDb(path: string) {
             c.seniority,
             c.kind,
             c.costRateCentsPerDay,
-            c.billRateCentsPerDay,
+            c.supplier,
             c.contractEnd,
             c.status,
             now(),
