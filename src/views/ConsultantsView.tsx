@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Seniority, type Status, type Team } from '../../shared/types.ts';
+import { WORK_DAYS_PER_MONTH, WORK_MONTHS_PER_YEAR, CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Seniority, type Status, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatCents, parseEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
@@ -164,7 +164,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
               <Field label="Fornecedor" hint="Empresa que coloca o consultor" error={errors.supplier}>
                 {(c) => <input {...c} name="supplier" type="text" list="supplier-options" autoComplete="off" value={form.supplier} onChange={set('supplier')} />}
               </Field>
-              <Field label="Rate por dia (EUR)" hint="Obrigatória para externos" error={errors.cost}>
+              <Field label="Rate por dia (EUR)" hint="Rate diária. Custo calculado a 20 dias × 11 meses." error={errors.cost}>
                 {(c) => <input {...c} name="cost" type="text" inputMode="decimal" autoComplete="off" value={form.cost} onChange={set('cost')} />}
               </Field>
               <datalist id="supplier-options">
@@ -210,6 +210,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
                 <th scope="col">Tipo</th>
                 <th scope="col">Fornecedor</th>
                 <th scope="col" className="num">Rate/dia</th>
+                <th scope="col" className="num">Custo/ano</th>
                 <th scope="col">Fim contrato</th>
                 <th scope="col">Estado</th>
                 <th scope="col"><span className="sr-only">Ações</span></th>
@@ -226,6 +227,11 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
                   <td>{c.kind === 'internal' ? '—' : (c.supplier ?? <span className="flag">▲ em falta</span>)}</td>
                   <td className="num">
                     {c.kind === 'internal' ? '—' : c.costRateCentsPerDay > 0 ? formatCents(c.costRateCentsPerDay) : <span className="flag">▲ em falta</span>}
+                  </td>
+                  <td className="num">
+                    {c.kind === 'internal' || c.costRateCentsPerDay === 0
+                      ? '—'
+                      : formatCents(c.costRateCentsPerDay * WORK_DAYS_PER_MONTH * WORK_MONTHS_PER_YEAR)}
                   </td>
                   <td>{c.contractEnd ?? '—'}</td>
                   <td>{STATUS_LABEL[c.status]}</td>

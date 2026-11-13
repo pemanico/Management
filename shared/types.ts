@@ -24,6 +24,10 @@ export type TeamInput = {
 // plannedHeadcount = internos + externos (calculado pelo servidor)
 export type Team = TeamInput & { id: number; plannedHeadcount: number; updatedAt: string };
 
+// Custo dos externos: rate diária x 20 dias x 11 meses (220 dias/ano).
+export const WORK_DAYS_PER_MONTH = 20;
+export const WORK_MONTHS_PER_YEAR = 11;
+
 export const CONSULTANT_KINDS = ['internal', 'external'] as const;
 export type ConsultantKind = (typeof CONSULTANT_KINDS)[number];
 
@@ -149,7 +153,6 @@ export type Alert = {
     | 'contract_expiring'
     | 'missing_cost_rate'
     | 'missing_supplier'
-    | 'supplier_concentration'
     | 'stale_data'
     | 'project_at_risk'
     | 'project_overdue'
@@ -184,6 +187,8 @@ export type TeamSummary = {
   externalHeadcount: number;
   plannedInternalHeadcount: number;
   plannedExternalHeadcount: number;
+  externalMonthlyCostCents: number;
+  externalAnnualCostCents: number;
   avgCostRateCentsPerDay: number | null;
   contractsExpiring90d: number;
   openProjects: number;
@@ -211,7 +216,8 @@ export type SupplierSummary = {
   activeHeadcount: number;
   shareBp: number; // peso no total de externos ativos
   avgCostRateCentsPerDay: number | null;
-  dailyCostCents: number; // soma das rates/dia dos externos ativos deste fornecedor
+  monthlyCostCents: number; // soma das rates x 20 dias
+  annualCostCents: number; // soma das rates x 20 dias x 11 meses
   contractsExpiring90d: number;
   teams: string[];
 };
@@ -247,6 +253,8 @@ export type Summary = {
     externalHeadcount: number;
     plannedInternalHeadcount: number;
     plannedExternalHeadcount: number;
+    externalMonthlyCostCents: number;
+    externalAnnualCostCents: number;
     openProjects: number;
   };
   teams: TeamSummary[];

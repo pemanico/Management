@@ -9,7 +9,6 @@ const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   contract_expiring: 'Contrato',
   missing_cost_rate: 'Externo sem rate',
   missing_supplier: 'Externo sem fornecedor',
-  supplier_concentration: 'Concentração num fornecedor',
   stale_data: 'Dados antigos',
   project_at_risk: 'Projeto em risco',
   project_overdue: 'Projeto em atraso',
@@ -42,6 +41,8 @@ export function SummaryView({ summary }: { summary: Summary }) {
         <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {totals.plannedHeadcount}</dd></div>
         <div className="card"><dt>Internos ativos / orçamentados</dt><dd>{totals.internalHeadcount} / {totals.plannedInternalHeadcount}</dd></div>
         <div className="card"><dt>Externos ativos / orçamentados</dt><dd>{totals.externalHeadcount} / {totals.plannedExternalHeadcount}</dd></div>
+        <div className="card"><dt>Custo de externos / mês</dt><dd>{formatCents(totals.externalMonthlyCostCents)}</dd></div>
+        <div className="card"><dt>Custo de externos / ano</dt><dd>{formatCents(totals.externalAnnualCostCents)}</dd></div>
         <div className="card"><dt>Formações em aberto</dt><dd>{training.openCount}</dd></div>
         <div className="card"><dt>Objetivos {objectives.year} atingidos / total</dt><dd>{objectives.achieved} / {objectives.total}</dd></div>
         <div className="card"><dt>Avaliações {evaluations.year} finais / em falta</dt><dd>{evaluations.finalCount} / {evaluations.missingCount}</dd></div>
@@ -63,6 +64,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
       )}
 
       <h3>Fornecedores de externos</h3>
+      <p className="muted-text">Custos = rate diária × 20 dias × 11 meses, a 100 % (não considera a % de alocação).</p>
       {suppliers.length === 0 ? (
         <p className="empty">Sem externos ativos com fornecedor registado.</p>
       ) : (
@@ -75,7 +77,8 @@ export function SummaryView({ summary }: { summary: Summary }) {
                 <th scope="col" className="num">Externos ativos</th>
                 <th scope="col" className="num">% dos externos</th>
                 <th scope="col" className="num">Rate média/dia</th>
-                <th scope="col" className="num">Custo/dia</th>
+                <th scope="col" className="num">Custo/mês</th>
+                <th scope="col" className="num">Custo/ano</th>
                 <th scope="col" className="num">Contratos a expirar (90d)</th>
                 <th scope="col">Equipas</th>
               </tr>
@@ -87,7 +90,8 @@ export function SummaryView({ summary }: { summary: Summary }) {
                   <td className="num">{f.activeHeadcount}</td>
                   <td className="num">{formatBp(f.shareBp)}</td>
                   <td className="num">{formatCents(f.avgCostRateCentsPerDay)}</td>
-                  <td className="num">{formatCents(f.dailyCostCents)}</td>
+                  <td className="num">{formatCents(f.monthlyCostCents)}</td>
+                  <td className="num">{formatCents(f.annualCostCents)}</td>
                   <td className="num">
                     {f.contractsExpiring90d}
                     {f.contractsExpiring90d > 0 && <span className="flag"> ▲</span>}
@@ -117,6 +121,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
                 <th scope="col" className="num">Internos (ativos / orç.)</th>
                 <th scope="col" className="num">Externos (ativos / orç.)</th>
                 <th scope="col" className="num">Rate média (externos)</th>
+                <th scope="col" className="num">Custo externos/ano</th>
                 <th scope="col" className="num">Contratos a expirar (90d)</th>
                 <th scope="col" className="num">Projetos abertos</th>
                 <th scope="col" className="num">Sem alocação</th>
@@ -150,6 +155,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
                     {t.externalHeadcount !== t.plannedExternalHeadcount && <span className="flag"> ▲</span>}
                   </td>
                   <td className="num">{formatCents(t.avgCostRateCentsPerDay)}</td>
+                  <td className="num">{t.externalHeadcount === 0 ? '—' : formatCents(t.externalAnnualCostCents)}</td>
                   <td className="num">{t.contractsExpiring90d}</td>
                   <td className="num">{t.openProjects}</td>
                   <td className="num">{t.unallocatedPeople}</td>

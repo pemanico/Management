@@ -368,7 +368,7 @@ test('internos não guardam rate; externos exigem rate; médias só de externos'
   close();
 });
 
-test('headcount por tipo, fornecedores e concentração', async () => {
+test('headcount por tipo, fornecedores e custo de externos', async () => {
   const { call, close } = await setup();
   try {
     // total bate certo (3 = 3) mas a composição não: 2 internos + 1 externo orçamentados, 0 internos + 3 externos reais
@@ -387,12 +387,10 @@ test('headcount por tipo, fornecedores e concentração', async () => {
     assert.equal(s.suppliers.length, 2); // Acme/acme agrupados
     assert.deepEqual(
       { ...s.suppliers[0] },
-      { supplier: 'Acme', activeHeadcount: 2, shareBp: 6667, avgCostRateCentsPerDay: 500_00, dailyCostCents: 1000_00, contractsExpiring90d: 1, teams: ['T'] },
+      { supplier: 'Acme', activeHeadcount: 2, shareBp: 6667, avgCostRateCentsPerDay: 500_00, monthlyCostCents: 20_000_00, annualCostCents: 220_000_00, contractsExpiring90d: 1, teams: ['T'] },
     );
-    assert.ok(!s.alerts.some((a: any) => a.type === 'supplier_concentration')); // só 3 externos: abaixo do mínimo
-    await call('/api/consultants', 'POST', { ...base, code: 'E4', costRateCentsPerDay: 500_00, supplier: 'Acme' });
-    s = (await call('/api/summary')).data as any;
-    assert.ok(s.alerts.some((a: any) => a.type === 'supplier_concentration' && a.scope === 'Acme'));
+    assert.equal(s.teams[0].externalMonthlyCostCents, 30_000_00); // (400+600+500) x 20
+    assert.equal(s.totals.externalAnnualCostCents, 330_000_00); // x 11 meses
     assert.ok(!JSON.stringify(s).includes('billRate') && !JSON.stringify(s).includes('marginBp'));
   } finally {
     close();

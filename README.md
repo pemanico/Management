@@ -35,7 +35,8 @@ Para usar uma base de dados de teste separada:
 
 - Internos e externos: cada consultor tem um tipo. Dos **internos** a app não guarda rate nem salário (o servidor descarta-os mesmo que venham no pedido). Os **externos** têm rate por dia (> 0) e fornecedor obrigatórios. Não há rate faturada nem margem: a unidade não fatura.
 - Headcount orçamentado por tipo: cada equipa tem vagas de internos e de externos em separado; vagas e excessos são alertados por tipo (o total pode bater certo com a composição errada).
-- Fornecedores: o resumo agrupa os externos ativos por fornecedor (ignora maiúsculas/minúsculas): peso, rate média, custo/dia e contratos a expirar em 90 dias. Alerta de concentração quando um fornecedor tem mais de 50 % dos externos (só com 4+ externos).
+- Fornecedores: o resumo agrupa os externos ativos por fornecedor (ignora maiúsculas/minúsculas): peso, rate média, custo e contratos a expirar em 90 dias.
+- Custo de externos: rate diária × 20 dias × 11 meses (220 dias/ano), a 100 % (ignora a % de alocação). As constantes estão em `shared/types.ts`.
 - Migração de bases antigas: todos os consultores passam a "externo" sem fornecedor e o headcount orçamentado passa todo para externos. Corrige em Equipas e Consultores; a app alerta os externos sem fornecedor. A coluna antiga da rate faturada fica na base de dados sem ser usada.
 - Objetivos: por consultor **ou** por equipa (nunca ambos), com período (`2026`, `2026-H1`, `2026-H2`), estado, progresso e data limite. "Atingido" exige 100 %.
 - Avaliações: uma por consultor e período; classificação 1–4 **atribuída por ti** (a app nunca a calcula nem sugere). Uma avaliação final exige resumo com a evidência; rascunhos não. Datas futuras são recusadas.

@@ -1,4 +1,5 @@
 import { businessDate } from '../shared/dates.ts';
+import { WORK_DAYS_PER_MONTH, WORK_MONTHS_PER_YEAR } from '../shared/types.ts';
 import type {
   Alert,
   Allocation,
@@ -23,9 +24,6 @@ const DAY_MS = 86_400_000;
 const STALE_DAYS = 30;
 const EXPIRY_DAYS = 90;
 const ASSESSMENT_OLD_DAYS = 365;
-// Concentração: um fornecedor com mais de metade dos externos (só com 4+ externos, para não alertar em unidades pequenas).
-const SUPPLIER_CONCENTRATION_BP = 5000;
-const SUPPLIER_CONCENTRATION_MIN_EXTERNALS = 4;
 // Avisos de avaliações em falta só a partir deste mês (outubro): antes disso o ciclo ainda decorre.
 const EVALUATION_ALERT_FROM_MONTH = 10;
 
@@ -90,6 +88,7 @@ export function buildSummary(
       (c) => c.contractEnd !== null && c.contractEnd >= today && c.contractEnd <= limit,
     );
     const gap = t.plannedHeadcount - members.length;
+    const externalDaily = externals.reduce((a, c) => a + c.costRateCentsPerDay, 0);
     const internalCount = members.length - externals.length;
     const gapInternal = t.plannedInternalHeadcount - internalCount;
     const gapExternal = t.plannedExternalHeadcount - externals.length;
@@ -230,6 +229,8 @@ export function buildSummary(
       externalHeadcount: externals.length,
       plannedInternalHeadcount: t.plannedInternalHeadcount,
       plannedExternalHeadcount: t.plannedExternalHeadcount,
+      externalMonthlyCostCents: externalDaily * WORK_DAYS_PER_MONTH,
+      externalAnnualCostCents: externalDaily * WORK_DAYS_PER_MONTH * WORK_MONTHS_PER_YEAR,
       avgCostRateCentsPerDay: avgCost,
       contractsExpiring90d: expiring.length,
       openProjects: openProjects.length,
@@ -364,20 +365,12 @@ export function buildSummary(
       activeHeadcount: people.length,
       shareBp: Math.round((people.length * 10_000) / activeExternals.length),
       avgCostRateCentsPerDay: avgRounded(people.filter((c) => c.costRateCentsPerDay > 0).map((c) => c.costRateCentsPerDay)),
-      dailyCostCents: people.reduce((a, c) => a + c.costRateCentsPerDay, 0),
+      monthlyCostCents: people.reduce((a, c) => a + c.costRateCentsPerDay, 0) * WORK_DAYS_PER_MONTH,
+      annualCostCents: people.reduce((a, c) => a + c.costRateCentsPerDay, 0) * WORK_DAYS_PER_MONTH * WORK_MONTHS_PER_YEAR,
       contractsExpiring90d: people.filter((c) => c.contractEnd !== null && c.contractEnd >= today && c.contractEnd <= limit).length,
       teams: [...new Set(people.map((c) => teamById.get(c.teamId)?.name ?? '—'))].sort(),
     }))
     .sort((a, b) => b.activeHeadcount - a.activeHeadcount || a.supplier.localeCompare(b.supplier, 'pt-PT'));
-  if (activeExternals.length >= SUPPLIER_CONCENTRATION_MIN_EXTERNALS)
-    for (const sup of supplierSummaries)
-      if (sup.shareBp > SUPPLIER_CONCENTRATION_BP)
-        alerts.push({
-          type: 'supplier_concentration',
-          scope: sup.supplier,
-          message: `${sup.activeHeadcount} de ${activeExternals.length} externos (${pct(sup.shareBp)}) vêm deste fornecedor.`,
-        });
-
   return {
     generatedAt: now.toISOString(),
     currency: 'EUR',
@@ -390,6 +383,8 @@ export function buildSummary(
       externalHeadcount: teamSummaries.reduce((a, t) => a + t.externalHeadcount, 0),
       plannedInternalHeadcount: teams.reduce((a, t) => a + t.plannedInternalHeadcount, 0),
       plannedExternalHeadcount: teams.reduce((a, t) => a + t.plannedExternalHeadcount, 0),
+      externalMonthlyCostCents: teamSummaries.reduce((a, t) => a + t.externalMonthlyCostCents, 0),
+      externalAnnualCostCents: teamSummaries.reduce((a, t) => a + t.externalAnnualCostCents, 0),
       openProjects: projects.filter(isOpenProject).length,
     },
     teams: teamSummaries,
