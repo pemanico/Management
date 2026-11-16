@@ -89,10 +89,10 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme);
 
-  // Grupos do menu fechados pelo utilizador (fica guardado no browser).
-  const [collapsed, setCollapsed] = usePersistedState<string[]>('gu:nav:collapsed', []);
+  // Grupos do menu abertos pelo utilizador (fica guardado no browser). Por omissão estão todos fechados.
+  const [openGroups, setOpenGroups] = usePersistedState<string[]>('gu:nav:open', []);
   const toggleGroup = (group: string) =>
-    setCollapsed((c) => (c.includes(group) ? c.filter((x) => x !== group) : [...c, group]));
+    setOpenGroups((o) => (o.includes(group) ? o.filter((x) => x !== group) : [...o, group]));
 
   function chooseTheme(t: Theme) {
     setTheme(t);
@@ -184,14 +184,14 @@ export function App() {
                 <button
                   type="button"
                   id={`nav-${g.group}`}
-                  aria-expanded={!collapsed.includes(g.group)}
+                  aria-expanded={openGroups.includes(g.group)}
                   aria-controls={`nav-list-${g.group}`}
                   onClick={() => toggleGroup(g.group)}
                 >
                   {g.group}
                 </button>
               </h2>
-              <ul id={`nav-list-${g.group}`} aria-labelledby={`nav-${g.group}`} hidden={collapsed.includes(g.group)}>
+              <ul id={`nav-list-${g.group}`} aria-labelledby={`nav-${g.group}`} hidden={!openGroups.includes(g.group)}>
                 {g.items.map((r) => (
                   <li key={r.id}>
                     <a href={`#/${r.id}`} aria-current={route === r.id ? 'page' : undefined}>
