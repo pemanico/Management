@@ -9,6 +9,7 @@ import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 type Props = { teams: Team[]; projects: Project[]; allocations: Allocation[]; onChanged: () => Promise<void> };
 type Form = {
   name: string;
+  description: string;
   teamId: string;
   status: ProjectStatus;
   priority: Priority;
@@ -31,6 +32,7 @@ export const PRIORITY_LABEL: Record<Priority, string> = { low: 'Low', medium: 'M
 
 const EMPTY: Form = {
   name: '',
+  description: '',
   teamId: '',
   status: 'planned',
   priority: 'medium',
@@ -78,6 +80,7 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
     const planned = Number(form.plannedHeadcount);
     if (!Number.isInteger(planned) || planned < 0) next.plannedHeadcount = 'Enter a whole number ≥ 0.';
     if (budgetCents === null) next.budget = 'Invalid format. Example: 25.000,00';
+    if (form.description.trim().length > 500) next.description = 'Maximum 500 characters.';
     if (form.startDate !== '' && form.endDate !== '' && form.endDate < form.startDate)
       next.endDate = 'The end date cannot be before the start date.';
     setErrors(next);
@@ -89,6 +92,7 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
       await api.saveProject(
         {
           name: form.name.trim(),
+          description: form.description.trim() === '' ? null : form.description.trim(),
           teamId: Number(form.teamId),
           status: form.status,
           priority: form.priority,
@@ -114,6 +118,7 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
     setFormError(undefined);
     setForm({
       name: p.name,
+      description: p.description ?? '',
       teamId: String(p.teamId),
       status: p.status,
       priority: p.priority,
@@ -178,6 +183,9 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
           <Field label="Planned end" hint="Optional" error={errors.endDate}>
             {(c) => <input {...c} name="endDate" type="date" value={form.endDate} onChange={set('endDate')} />}
           </Field>
+          <Field label="Description" hint="Optional. What the project is for, in a few lines (max. 500 characters)." error={errors.description} wide>
+            {(c) => <textarea {...c} name="description" className="prose" rows={3} maxLength={500} value={form.description} onChange={set('description')} />}
+          </Field>
           <div className="actions">
             <button type="submit" className="primary" disabled={saving}>
               {saving ? 'Saving…' : editingId === undefined ? 'Add project' : 'Save changes'}
@@ -209,7 +217,10 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
             <tbody>
               {projects.map((p) => (
                 <tr key={p.id} className={p.status === 'done' ? 'muted' : undefined}>
-                  <th scope="row">{p.name}</th>
+                  <th scope="row">
+                    {p.name}
+                    {p.description && <span className="cell-note">{p.description}</span>}
+                  </th>
                   <td>{teamName.get(p.teamId) ?? '—'}</td>
                   <td>
                     {PROJECT_STATUS_LABEL[p.status]}

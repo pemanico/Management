@@ -15,6 +15,7 @@ import { TrainingView } from './views/TrainingView.tsx';
 import { ObjectivesView } from './views/ObjectivesView.tsx';
 import { EvaluationsView } from './views/EvaluationsView.tsx';
 import { ProfilesView } from './views/ProfilesView.tsx';
+import { ORG_LEVELS, OrgChartView, type OrgLevel } from './views/OrgChartView.tsx';
 
 const NAV = [
   {
@@ -32,6 +33,7 @@ const NAV = [
       { id: 'teams', label: 'Teams' },
       { id: 'consultants', label: 'Consultants' },
       { id: 'profiles', label: 'Profiles' },
+      { id: 'org', label: 'Org chart' },
     ],
   },
   {
@@ -249,6 +251,17 @@ export function App() {
             </Panel>
             <Panel active={route === 'profiles'}>
               <ProfilesView profiles={state.data.profiles} onChanged={saved} />
+            </Panel>
+            <Panel active={route === 'org'}>
+              <OrgChartView
+                teams={state.data.teams}
+                departments={state.data.departments}
+                consultants={state.data.consultants}
+                level={ORG_LEVELS.find((l) => l === params.get('level')) ?? ('teams' as OrgLevel)}
+                onLevel={(l) => {
+                  window.location.hash = `#/org?level=${l}`;
+                }}
+              />
             </Panel>
             <Panel active={route === 'projects'}>
               <ProjectsView

@@ -190,6 +190,9 @@ export function parseProject(body: unknown): Result<ProjectInput> {
   if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const name = text(body.name, 100);
   if (name === null) return { ok: false, error: 'Invalid project name (1–100 characters).' };
+  const description = isBlank(body.description) ? null : text(body.description, 500);
+  if (description === null && !isBlank(body.description))
+    return { ok: false, error: 'Invalid description (max. 500 characters).' };
   const teamId = intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER);
   if (teamId === null) return { ok: false, error: 'Invalid team.' };
   if (!PROJECT_STATUSES.includes(body.status as ProjectStatus))
@@ -209,6 +212,7 @@ export function parseProject(body: unknown): Result<ProjectInput> {
     ok: true,
     value: {
       name,
+      description,
       teamId,
       status: body.status as ProjectStatus,
       startDate: start.value,

@@ -578,3 +578,21 @@ test('migração: perfis em texto livre passam a constar da lista (nada fica inv
   assert.equal(db.getConsultant(1)!.profile, 'Data Engineer');
   db.close();
 });
+
+test('projetos: descrição opcional, validada e fora do resumo', async () => {
+  const { call, close } = await setup();
+  try {
+    const t = ((await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 0 })).data as any).id;
+    const base = { name: 'P1', teamId: t, status: 'active', startDate: null, endDate: null, budgetCents: 0, priority: 'medium', plannedHeadcount: 0 };
+    const semDescricao = await call('/api/projects', 'POST', base);
+    assert.equal(semDescricao.status, 201);
+    assert.equal((semDescricao.data as any).description, null);
+    const com = await call('/api/projects', 'POST', { ...base, name: 'P2', description: 'Migrar relatórios fictícios' });
+    assert.equal((com.data as any).description, 'Migrar relatórios fictícios');
+    assert.equal((await call('/api/projects', 'POST', { ...base, name: 'P3', description: 'x'.repeat(501) })).status, 400);
+    // texto livre não vai para o que se envia ao Claude
+    assert.ok(!JSON.stringify((await call('/api/summary')).data).includes('Migrar relatórios'));
+  } finally {
+    close();
+  }
+});

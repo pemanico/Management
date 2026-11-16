@@ -256,3 +256,31 @@ tr.muted { color: var(--muted); }
   .bar-row { grid-template-columns: minmax(0, 1fr) auto; }
   .bar-row .track { grid-column: 1 / -1; grid-row: 2; }
 }
+
+.field.wide { grid-column: 1 / -1; }
+textarea.prose { font-family: inherit; font-size: inherit; resize: vertical; }
+.cell-note { display: block; max-width: 28rem; white-space: normal; font-weight: 400; font-size: 0.85rem; color: var(--muted); }
+
+/* ---- Organigrama: árvore de cima para baixo, com linhas de ligação em CSS ---- */
+.org-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem 1rem; margin: 0.75rem 0; }
+.org { display: inline-block; min-width: 100%; }
+.org ul { display: flex; justify-content: center; list-style: none; margin: 0; padding: 1.25rem 0 0; position: relative; }
+.org > ul { padding-top: 0; }
+.org li { position: relative; display: flex; flex-direction: column; align-items: center; padding: 1.25rem 0.5rem 0; }
+.org li::before, .org li::after { content: ''; position: absolute; top: 0; right: 50%; width: 50%; height: 1.25rem; border-top: 2px solid var(--baseline); }
+.org li::after { right: auto; left: 50%; border-left: 2px solid var(--baseline); }
+.org li:only-child { padding-top: 0; }
+.org li:only-child::before, .org li:only-child::after { display: none; }
+.org li:first-child::before, .org li:last-child::after { border: 0; }
+.org li:last-child::before { border-right: 2px solid var(--baseline); border-radius: 0 6px 0 0; }
+.org li:first-child::after { border-radius: 6px 0 0 0; }
+.org ul ul::before { content: ''; position: absolute; top: 0; left: 50%; margin-left: -1px; height: 1.25rem; border-left: 2px solid var(--baseline); }
+.org-box { display: flex; flex-direction: column; gap: 0.15rem; min-width: 9rem; max-width: 15rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); text-align: center; }
+.org-box > span { font-size: 0.82rem; color: var(--muted); }
+.org-root { background: var(--side-bg); border-color: var(--side-bg); color: #fff; }
+.org-root > span { color: var(--side-text); }
+.org-dept { border-top: 3px solid var(--accent-strong); }
+.org-none { border-style: dashed; }
+.org-people { list-style: none; display: block !important; padding: 0.4rem 0 0 !important; margin: 0.4rem 0 0 !important; border-top: 1px solid var(--border); text-align: left; font-size: 0.85rem; }
+.org-people li { display: block; padding: 0.1rem 0; }
+.org-people li::before, .org-people li::after, .org-people::before { display: none !important; }

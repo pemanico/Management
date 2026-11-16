@@ -140,10 +140,11 @@ export function createApp(db: Db): Server {
         if (kind === 'projects') {
           const teams = new Map(db.listTeams().map((t) => [t.id, t.name]));
           const csv = toCsv(
-            ['id', 'projeto', 'equipa', 'estado', 'prioridade', 'hc_necessario', 'inicio', 'fim', 'budget_eur', 'atualizado_em'],
+            ['id', 'projeto', 'descricao', 'equipa', 'estado', 'prioridade', 'hc_necessario', 'inicio', 'fim', 'budget_eur', 'atualizado_em'],
             db.listProjects().map((p) => [
               p.id,
               p.name,
+              p.description ?? '',
               teams.get(p.teamId) ?? '',
               p.status,
               p.priority,

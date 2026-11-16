@@ -73,6 +73,7 @@ export type Consultant = ConsultantInput & { id: number; updatedAt: string };
 
 export type ProjectInput = {
   name: string;
+  description: string | null; // opcional; texto livre, fica só na base local (não vai no resumo para o Claude)
   teamId: number;
   status: ProjectStatus;
   startDate: string | null; // YYYY-MM-DD

@@ -4,6 +4,8 @@ Do mais recente para o mais antigo.
 
 ## 2026-11-16
 
+- Projetos: descrição opcional (máx. 500 caracteres); fica só na base local e no CSV, não vai no resumo para o Claude.
+- Organigrama (People → Org chart): unidade → departamentos → equipas → pessoas, com escolha do nível de detalhe (refletido na URL).
 - Interface (fase 3): quatro dashboards com gráficos (Overview, Headcount & cost, Projects & allocations, Skills & training). Gráficos em HTML/CSS, sem dependências; cores validadas para claro e escuro.
 - Interface (fase 2): UI e mensagens do servidor em inglês; páginas com endereços em inglês (`#/teams`, `#/consultants`, …). Prompt, CSV e docs continuam em português.
 - Interface nova (fase 1): menu lateral agrupado à esquerda (gaveta no telemóvel), tema claro/escuro/sistema guardado no browser, paleta verde.

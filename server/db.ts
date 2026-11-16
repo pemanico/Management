@@ -173,7 +173,7 @@ const REQ_SELECT = `SELECT team_id AS teamId, skill_id AS skillId, required_leve
 type RatingRow = Omit<Rating, 'validated'> & { validated: number };
 const toRating = (r: RatingRow): Rating => ({ ...r, validated: r.validated === 1 });
 
-const PROJECT_SELECT = `SELECT id, name, team_id AS teamId, status, start_date AS startDate,
+const PROJECT_SELECT = `SELECT id, name, description, team_id AS teamId, status, start_date AS startDate,
   end_date AS endDate, budget_cents AS budgetCents, priority,
   planned_headcount AS plannedHeadcount, updated_at AS updatedAt FROM projects`;
 
@@ -271,6 +271,7 @@ export function openDb(path: string) {
     db.exec("ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
   if (!projectCols.includes('planned_headcount'))
     db.exec('ALTER TABLE projects ADD COLUMN planned_headcount INTEGER NOT NULL DEFAULT 0');
+  if (!projectCols.includes('description')) db.exec('ALTER TABLE projects ADD COLUMN description TEXT');
   const now = () => new Date().toISOString();
   // [total arredondado, externos arredondado (colunas antigas), internos em centésimos, externos em centésimos]
   const hc = (t: TeamInput) => {
@@ -417,20 +418,20 @@ export function openDb(path: string) {
     createProject: (p: ProjectInput) => {
       const r = db
         .prepare(
-          `INSERT INTO projects (name, team_id, status, start_date, end_date, budget_cents, priority,
-           planned_headcount, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO projects (name, description, team_id, status, start_date, end_date, budget_cents, priority,
+           planned_headcount, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
         )
-        .run(p.name, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, p.priority, p.plannedHeadcount, now());
+        .run(p.name, p.description, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, p.priority, p.plannedHeadcount, now());
       return Number(r.lastInsertRowid);
     },
     updateProject: (id: number, p: ProjectInput) =>
       Number(
         db
           .prepare(
-            `UPDATE projects SET name=?, team_id=?, status=?, start_date=?, end_date=?, budget_cents=?,
+            `UPDATE projects SET name=?, description=?, team_id=?, status=?, start_date=?, end_date=?, budget_cents=?,
              priority=?, planned_headcount=?, updated_at=? WHERE id=?`,
           )
-          .run(p.name, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, p.priority, p.plannedHeadcount, now(), id)
+          .run(p.name, p.description, p.teamId, p.status, p.startDate, p.endDate, p.budgetCents, p.priority, p.plannedHeadcount, now(), id)
           .changes,
       ),
     deleteProject: (id: number) =>
