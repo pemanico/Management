@@ -4,6 +4,7 @@ Do mais recente para o mais antigo.
 
 ## 2026-11-16
 
+- Interface nova (fase 1): menu lateral agrupado à esquerda (gaveta no telemóvel), tema claro/escuro/sistema guardado no browser, paleta verde.
 - Departamentos: agrupam equipas (opcional). O manager fica ligado a um departamento, sem equipa principal, e conta em partes iguais por todas as equipas dele.
 - Migração: `consultants.team_id` passa a opcional (recriação da tabela, com dados copiados). Fazer cópia da base antes de arrancar.
 - Vistas montadas em paralelo: trocar de rota não perde o que estava escrito num formulário.

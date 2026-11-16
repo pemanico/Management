@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Allocation, Consultant, Department, Evaluation, Profile, Objective, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
 import { api, ApiError } from './api.ts';
+import { applyTheme, readTheme, THEMES, type Theme } from './theme.ts';
 import { SummaryView } from './views/SummaryView.tsx';
 import { TeamsView } from './views/TeamsView.tsx';
 import { ConsultantsView } from './views/ConsultantsView.tsx';
@@ -14,21 +15,43 @@ import { ObjectivesView } from './views/ObjectivesView.tsx';
 import { EvaluationsView } from './views/EvaluationsView.tsx';
 import { ProfilesView } from './views/ProfilesView.tsx';
 
-const ROUTES = [
-  { id: 'resumo', label: 'Resumo' },
-  { id: 'equipas', label: 'Equipas' },
-  { id: 'consultores', label: 'Consultores' },
-  { id: 'perfis', label: 'Perfis' },
-  { id: 'projetos', label: 'Projetos' },
-  { id: 'alocacoes', label: 'Alocações' },
-  { id: 'competencias', label: 'Competências' },
-  { id: 'matriz', label: 'Skill matrix' },
-  { id: 'formacao', label: 'Formação' },
-  { id: 'objetivos', label: 'Objetivos' },
-  { id: 'avaliacoes', label: 'Avaliações' },
-  { id: 'exportar', label: 'Exportar' },
+const NAV = [
+  { group: 'Dashboards', items: [{ id: 'resumo', label: 'Resumo' }] },
+  {
+    group: 'Pessoas',
+    items: [
+      { id: 'equipas', label: 'Equipas' },
+      { id: 'consultores', label: 'Consultores' },
+      { id: 'perfis', label: 'Perfis' },
+    ],
+  },
+  {
+    group: 'Trabalho',
+    items: [
+      { id: 'projetos', label: 'Projetos' },
+      { id: 'alocacoes', label: 'Alocações' },
+    ],
+  },
+  {
+    group: 'Competências',
+    items: [
+      { id: 'competencias', label: 'Competências' },
+      { id: 'matriz', label: 'Skill matrix' },
+      { id: 'formacao', label: 'Formação' },
+    ],
+  },
+  {
+    group: 'Desempenho',
+    items: [
+      { id: 'objetivos', label: 'Objetivos' },
+      { id: 'avaliacoes', label: 'Avaliações' },
+    ],
+  },
+  { group: 'Dados', items: [{ id: 'exportar', label: 'Exportar' }] },
 ] as const;
-type RouteId = (typeof ROUTES)[number]['id'];
+const ROUTES = NAV.flatMap((g) => g.items.map((r) => ({ id: r.id, label: r.label })));
+const THEME_LABEL: Record<Theme, string> = { system: 'Sistema', light: 'Claro', dark: 'Escuro' };
+type RouteId = (typeof NAV)[number]['items'][number]['id'];
 
 function readHash(): { route: RouteId; params: URLSearchParams } {
   const [path = '', query = ''] = window.location.hash.replace('#/', '').split('?');
@@ -62,9 +85,19 @@ export function App() {
   const { route, params } = hash;
   const [state, setState] = useState<State>({ status: 'loading' });
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<Theme>(readTheme);
+
+  function chooseTheme(t: Theme) {
+    setTheme(t);
+    applyTheme(t);
+  }
 
   useEffect(() => {
-    const onHash = () => setHash(readHash());
+    const onHash = () => {
+      setHash(readHash());
+      setMenuOpen(false); // no telemóvel, escolher uma página fecha o menu
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -115,21 +148,48 @@ export function App() {
 
   return (
     <>
-      <header className="app-header">
-        <h1>Gestão da Unidade</h1>
-        <nav aria-label="Principal">
-          <ul>
-            {ROUTES.map((r) => (
-              <li key={r.id}>
-                <a href={`#/${r.id}`} aria-current={route === r.id ? 'page' : undefined}>
-                  {r.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+      <header className="topbar">
+        <button
+          type="button"
+          className="menu-toggle"
+          aria-expanded={menuOpen}
+          aria-controls="sidebar"
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          Menu
+        </button>
+        <span className="topbar-title">{ROUTES.find((r) => r.id === route)?.label}</span>
       </header>
-      <main>
+      <aside id="sidebar" className={menuOpen ? 'sidebar open' : 'sidebar'}>
+        <h1 className="brand">Gestão da Unidade</h1>
+        <nav aria-label="Principal">
+          {NAV.map((g) => (
+            <div key={g.group} className="nav-group">
+              <h2 id={`nav-${g.group}`}>{g.group}</h2>
+              <ul aria-labelledby={`nav-${g.group}`}>
+                {g.items.map((r) => (
+                  <li key={r.id}>
+                    <a href={`#/${r.id}`} aria-current={route === r.id ? 'page' : undefined}>
+                      {r.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+        <fieldset className="theme-switch">
+          <legend>Tema</legend>
+          {THEMES.map((t) => (
+            <label key={t}>
+              <input type="radio" name="theme" value={t} checked={theme === t} onChange={() => chooseTheme(t)} />
+              <span>{THEME_LABEL[t]}</span>
+            </label>
+          ))}
+        </fieldset>
+      </aside>
+      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
+      <main className="content">
         {state.status === 'loading' && <p role="status">A carregar…</p>}
         {state.status === 'error' && (
           <div role="alert" className="error banner">
