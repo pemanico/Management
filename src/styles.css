@@ -143,7 +143,7 @@ h3 { font-size: 1rem; margin: 1rem 0 0.5rem; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; margin: 0.75rem 0; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.75rem; margin: 0.75rem 0; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin: 0.75rem 0; }
 .kpis .card { margin: 0; }
 .kpis dt { color: var(--muted); font-size: 0.85rem; }
 .kpis .card { border-top: 3px solid var(--accent-strong); }
@@ -207,3 +207,52 @@ tr.muted { color: var(--muted); }
 
 .plain-list { list-style: none; padding: 0; margin: 0.5rem 0; }
 .plain-list li { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+
+/* ---- Dashboards: gráficos ---- */
+:root {
+  --series-a: #00915a; --series-b: #3a6fd0;
+  --status-good: #0ca30c; --status-info: #3a6fd0; --status-neutral: #9aa5a0; --status-warning: #fab219; --status-critical: #d03b3b;
+  --baseline: #c3cbc6;
+}
+:root[data-theme='dark'] { --series-a: #1fa373; --series-b: #4f84e0; --status-info: #4f84e0; --status-neutral: #6f7c76; --baseline: #3a4741; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { --series-a: #1fa373; --series-b: #4f84e0; --status-info: #4f84e0; --status-neutral: #6f7c76; --baseline: #3a4741; }
+}
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: 0.75rem; margin: 0.75rem 0; }
+.dash-grid .chart { margin: 0; }
+.chart { margin-left: 0; margin-right: 0; }
+.chart figcaption h3 { margin: 0 0 0.25rem; }
+.chart figcaption p { margin: 0 0 0.5rem; font-size: 0.85rem; }
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.25rem 0 0.75rem; padding: 0; font-size: 0.85rem; color: var(--muted); }
+.legend li { display: inline-flex; align-items: center; gap: 0.4rem; }
+.legend strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.swatch { width: 0.75rem; height: 0.75rem; border-radius: 3px; }
+.swatch-tick { width: 2px; height: 0.95rem; background: var(--text); margin: 0 0.3rem; }
+.bars { list-style: none; margin: 0; padding: 0; }
+.bar-row { display: grid; grid-template-columns: minmax(6rem, 11rem) minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.35rem 0; }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
+.bar-value { font-variant-numeric: tabular-nums; font-size: 0.9rem; white-space: nowrap; text-align: right; }
+.track { position: relative; display: flex; gap: 2px; height: 14px; border-left: 1px solid var(--baseline); }
+.seg { height: 100%; min-width: 2px; }
+.seg:last-of-type { border-radius: 0 4px 4px 0; }
+.tick { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); }
+.series-a { background: var(--series-a); }
+.series-b { background: var(--series-b); }
+.status-track { height: 18px; border-left: 0; margin: 0.5rem 0; }
+.status-track .seg:first-of-type { border-radius: 4px 0 0 4px; }
+.status-track .seg:only-of-type { border-radius: 4px; }
+.seg.status-good { background: var(--status-good); }
+.seg.status-info { background: var(--status-info); }
+.seg.status-neutral { background: var(--status-neutral); }
+.seg.status-warning { background: var(--status-warning); }
+.seg.status-critical { background: var(--status-critical); }
+.status-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; border-radius: 50%; font-size: 0.7rem; font-weight: 700; color: #fff; }
+.status-icon.status-good { background: var(--status-good); }
+.status-icon.status-info { background: var(--status-info); }
+.status-icon.status-neutral { background: var(--status-neutral); }
+.status-icon.status-warning { background: var(--status-warning); color: #0b0b0b; }
+.status-icon.status-critical { background: var(--status-critical); }
+@media (max-width: 600px) {
+  .bar-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .bar-row .track { grid-column: 1 / -1; grid-row: 2; }
+}

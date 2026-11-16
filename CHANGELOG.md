@@ -4,6 +4,7 @@ Do mais recente para o mais antigo.
 
 ## 2026-11-16
 
+- Interface (fase 3): quatro dashboards com gráficos (Overview, Headcount & cost, Projects & allocations, Skills & training). Gráficos em HTML/CSS, sem dependências; cores validadas para claro e escuro.
 - Interface (fase 2): UI e mensagens do servidor em inglês; páginas com endereços em inglês (`#/teams`, `#/consultants`, …). Prompt, CSV e docs continuam em português.
 - Interface nova (fase 1): menu lateral agrupado à esquerda (gaveta no telemóvel), tema claro/escuro/sistema guardado no browser, paleta verde.
 - Departamentos: agrupam equipas (opcional). O manager fica ligado a um departamento, sem equipa principal, e conta em partes iguais por todas as equipas dele.

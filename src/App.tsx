@@ -3,7 +3,7 @@ import type { Allocation, Consultant, Department, Evaluation, Profile, Objective
 import { api, ApiError } from './api.ts';
 import { applyTheme, readTheme, THEMES, type Theme } from './theme.ts';
 import { usePersistedState } from './usePersistedState.ts';
-import { SummaryView } from './views/SummaryView.tsx';
+import { CoverageDashboard, HeadcountDashboard, OverviewDashboard, StaffingDashboard } from './views/SummaryView.tsx';
 import { TeamsView } from './views/TeamsView.tsx';
 import { ConsultantsView } from './views/ConsultantsView.tsx';
 import { ExportView } from './views/ExportView.tsx';
@@ -17,7 +17,15 @@ import { EvaluationsView } from './views/EvaluationsView.tsx';
 import { ProfilesView } from './views/ProfilesView.tsx';
 
 const NAV = [
-  { group: 'Dashboards', items: [{ id: 'overview', label: 'Overview' }] },
+  {
+    group: 'Dashboards',
+    items: [
+      { id: 'overview', label: 'Overview' },
+      { id: 'headcount', label: 'Headcount & cost' },
+      { id: 'staffing', label: 'Projects & allocations' },
+      { id: 'coverage', label: 'Skills & training' },
+    ],
+  },
   {
     group: 'People',
     items: [
@@ -216,7 +224,16 @@ export function App() {
         {state.status === 'ready' && (
           <>
             <Panel active={route === 'overview'}>
-              <SummaryView summary={state.data.summary} />
+              <OverviewDashboard summary={state.data.summary} />
+            </Panel>
+            <Panel active={route === 'headcount'}>
+              <HeadcountDashboard summary={state.data.summary} />
+            </Panel>
+            <Panel active={route === 'staffing'}>
+              <StaffingDashboard summary={state.data.summary} />
+            </Panel>
+            <Panel active={route === 'coverage'}>
+              <CoverageDashboard summary={state.data.summary} />
             </Panel>
             <Panel active={route === 'teams'}>
               <TeamsView teams={state.data.teams} departments={state.data.departments} onChanged={saved} />

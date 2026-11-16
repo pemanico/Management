@@ -1,5 +1,6 @@
 import type { Summary } from '../../shared/types.ts';
 import { formatBp, formatCents, formatHc } from '../money.ts';
+import { BarChart, StatusBar } from '../components/Charts.tsx';
 import { PRIORITY_LABEL, PROJECT_STATUS_LABEL } from './ProjectsView.tsx';
 
 const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
@@ -27,29 +28,60 @@ const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   evaluation_pending: 'Missing evaluations',
 };
 
-export function SummaryView({ summary }: { summary: Summary }) {
-  const { totals, teams, alerts, projects, allocations, skills, training, objectives, evaluations, suppliers } = summary;
-  const hasMoney = totals.budgetCents > 0; // budget em euros é opcional (muitas unidades só têm budget em headcount)
+type Props = { summary: Summary };
+const fte = (pct: number) => (pct / 100).toFixed(1).replace('.', ',');
+const updated = (summary: Summary) => `Updated on ${summary.generatedAt.slice(0, 16).replace('T', ' ')} UTC`;
+
+/** Dashboard 1: a unidade num relance. */
+export function OverviewDashboard({ summary }: Props) {
+  const { totals, teams, alerts, projects, training, objectives, evaluations } = summary;
+  const openPositions = teams.reduce((a, t) => a + Math.max(0, Math.round(t.headcountGap * 100)), 0) / 100;
+  const understaffed = projects.filter((p) => p.gapPct > 0 && p.status !== 'done').length;
   return (
     <section aria-labelledby="sum-title">
       <h2 id="sum-title">Unit overview</h2>
-      <p className="muted-text">Updated on {summary.generatedAt.slice(0, 16).replace('T', ' ')} UTC</p>
+      <p className="muted-text">{updated(summary)}</p>
 
       <dl className="kpis">
-        {hasMoney && <div className="card"><dt>Total budget</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
-        {hasMoney && <div className="card"><dt>Actual spend</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
         <div className="card"><dt>Headcount active / budgeted</dt><dd>{totals.activeHeadcount} / {formatHc(totals.plannedHeadcount)}</dd></div>
-        <div className="card"><dt>Internal active / budgeted</dt><dd>{totals.internalHeadcount} / {formatHc(totals.plannedInternalHeadcount)}</dd></div>
-        <div className="card"><dt>External active / budgeted</dt><dd>{totals.externalHeadcount} / {formatHc(totals.plannedExternalHeadcount)}</dd></div>
-        <div className="card"><dt>People split across teams</dt><dd>{totals.sharedPeople}</dd></div>
-        <div className="card"><dt>External cost / month</dt><dd>{formatCents(totals.externalMonthlyCostCents)}</dd></div>
+        <div className="card"><dt>Open positions</dt><dd>{formatHc(openPositions)}</dd></div>
         <div className="card"><dt>External cost / year</dt><dd>{formatCents(totals.externalAnnualCostCents)}</dd></div>
-        <div className="card"><dt>Open training</dt><dd>{training.openCount}</dd></div>
-        <div className="card"><dt>Objectives {objectives.year} achieved / total</dt><dd>{objectives.achieved} / {objectives.total}</dd></div>
-        <div className="card"><dt>Evaluations {evaluations.year} final / missing</dt><dd>{evaluations.finalCount} / {evaluations.missingCount}</dd></div>
         <div className="card"><dt>Open projects</dt><dd>{totals.openProjects}</dd></div>
+        <div className="card"><dt>Under-staffed projects</dt><dd>{understaffed}</dd></div>
+        <div className="card"><dt>Open training</dt><dd>{training.openCount}</dd></div>
+        <div className="card"><dt>Evaluations {evaluations.year} final / missing</dt><dd>{evaluations.finalCount} / {evaluations.missingCount}</dd></div>
         <div className="card"><dt>Alerts</dt><dd>{alerts.length}</dd></div>
       </dl>
+
+      <div className="dash-grid">
+        <BarChart
+          title="Headcount against budget, by team"
+          legend={[{ series: 'a', name: 'Internal' }, { series: 'b', name: 'External' }]}
+          targetName="Budgeted"
+          empty="No teams yet. Start on the Teams page."
+          rows={teams.map((t) => ({
+            label: t.name,
+            segments: [
+              { series: 'a' as const, value: t.internalHeadcount, name: 'Internal', text: formatHc(t.internalHeadcount) },
+              { series: 'b' as const, value: t.externalHeadcount, name: 'External', text: formatHc(t.externalHeadcount) },
+            ],
+            target: t.plannedHeadcount,
+            targetText: formatHc(t.plannedHeadcount),
+            valueText: `${formatHc(t.activeHeadcount)} / ${formatHc(t.plannedHeadcount)}`,
+          }))}
+        />
+        <StatusBar
+          title={`Objectives ${objectives.year}`}
+          empty="No objectives for this year yet."
+          segments={[
+            { status: 'good', name: 'Achieved', value: objectives.achieved },
+            { status: 'info', name: 'On track', value: objectives.onTrack },
+            { status: 'neutral', name: 'Not started', value: objectives.notStarted },
+            { status: 'warning', name: 'At risk', value: objectives.atRisk },
+            { status: 'critical', name: 'Missed', value: objectives.missed },
+          ]}
+        />
+      </div>
 
       <h3>Alerts</h3>
       {alerts.length === 0 ? (
@@ -63,6 +95,51 @@ export function SummaryView({ summary }: { summary: Summary }) {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** Dashboard 2: headcount e custo de externos. */
+export function HeadcountDashboard({ summary }: Props) {
+  const { totals, teams, suppliers } = summary;
+  const hasMoney = totals.budgetCents > 0; // budget em euros é opcional (muitas unidades só têm budget em headcount)
+  return (
+    <section aria-labelledby="hc-title">
+      <h2 id="hc-title">Headcount &amp; cost</h2>
+      <p className="muted-text">{updated(summary)}</p>
+
+      <dl className="kpis">
+        <div className="card"><dt>Internal active / budgeted</dt><dd>{totals.internalHeadcount} / {formatHc(totals.plannedInternalHeadcount)}</dd></div>
+        <div className="card"><dt>External active / budgeted</dt><dd>{totals.externalHeadcount} / {formatHc(totals.plannedExternalHeadcount)}</dd></div>
+        <div className="card"><dt>People split across teams</dt><dd>{totals.sharedPeople}</dd></div>
+        <div className="card"><dt>External cost / month</dt><dd>{formatCents(totals.externalMonthlyCostCents)}</dd></div>
+        <div className="card"><dt>External cost / year</dt><dd>{formatCents(totals.externalAnnualCostCents)}</dd></div>
+        {hasMoney && <div className="card"><dt>Total budget</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
+        {hasMoney && <div className="card"><dt>Actual spend</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
+      </dl>
+
+      <div className="dash-grid">
+        <BarChart
+          title="External cost per year, by supplier"
+          empty="No active externals with a supplier."
+          rows={suppliers.map((f) => ({
+            label: f.supplier,
+            segments: [{ series: 'b' as const, value: f.annualCostCents, name: 'Cost/year', text: formatCents(f.annualCostCents) }],
+            valueText: formatCents(f.annualCostCents),
+          }))}
+        />
+        <BarChart
+          title="External cost per year, by team"
+          empty="No teams with active externals."
+          rows={teams
+            .filter((t) => t.externalAnnualCostCents > 0)
+            .map((t) => ({
+              label: t.name,
+              segments: [{ series: 'b' as const, value: t.externalAnnualCostCents, name: 'Cost/year', text: formatCents(t.externalAnnualCostCents) }],
+              valueText: formatCents(t.externalAnnualCostCents),
+            }))}
+        />
+      </div>
 
       <h3>External suppliers</h3>
       <p className="muted-text">Costs = daily rate × 20 days × 11 months, at 100 % (allocation % is not considered).</p>
@@ -146,7 +223,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
                   {hasMoney && (
                     <td className="num">
                       {formatBp(t.utilisationBp)}
-                      {t.utilisationBp !== null && t.utilisationBp >= 9000 && <span className="flag"> ▲ alto</span>}
+                      {t.utilisationBp !== null && t.utilisationBp >= 9000 && <span className="flag"> ▲ high</span>}
                     </td>
                   )}
                   <td className="num">
@@ -169,6 +246,52 @@ export function SummaryView({ summary }: { summary: Summary }) {
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+/** Dashboard 3: projetos e alocações. */
+export function StaffingDashboard({ summary }: Props) {
+  const { totals, projects, allocations } = summary;
+  const open = projects.filter((p) => p.status !== 'done');
+  const unallocated = allocations.filter((a) => a.allocatedPct === 0).length;
+  const over = allocations.filter((a) => a.allocatedPct > 100).length;
+  return (
+    <section aria-labelledby="st-title">
+      <h2 id="st-title">Projects &amp; allocations</h2>
+      <p className="muted-text">{updated(summary)}</p>
+
+      <dl className="kpis">
+        <div className="card"><dt>Open projects</dt><dd>{totals.openProjects}</dd></div>
+        <div className="card"><dt>Under-staffed projects</dt><dd>{open.filter((p) => p.gapPct > 0).length}</dd></div>
+        <div className="card"><dt>Unallocated consultants</dt><dd>{unallocated}</dd></div>
+        <div className="card"><dt>Over-allocated consultants</dt><dd>{over}</dd></div>
+      </dl>
+
+      <div className="dash-grid">
+        <BarChart
+          title="Allocated FTE against HC needed, open projects"
+          targetName="HC needed"
+          empty="No open projects."
+          rows={open.map((p) => ({
+            label: p.name,
+            segments: [{ series: 'a' as const, value: p.allocatedPct / 100, name: 'Allocated', text: `${fte(p.allocatedPct)} FTE` }],
+            target: p.plannedHeadcount,
+            targetText: String(p.plannedHeadcount),
+            valueText: p.plannedHeadcount === 0 ? `${fte(p.allocatedPct)} FTE` : `${fte(p.allocatedPct)} / ${p.plannedHeadcount} FTE`,
+          }))}
+        />
+        <StatusBar
+          title="Active consultants by allocation"
+          empty="No active consultants."
+          segments={[
+            { status: 'good', name: 'Allocated (up to 100 %)', value: allocations.length - unallocated - over },
+            { status: 'warning', name: 'Unallocated', value: unallocated },
+            { status: 'critical', name: 'Over-allocated', value: over },
+          ]}
+        />
+      </div>
+
       <h3>Projects</h3>
       {projects.length === 0 ? (
         <p className="empty">No projects yet.</p>
@@ -208,6 +331,81 @@ export function SummaryView({ summary }: { summary: Summary }) {
           </table>
         </div>
       )}
+
+      <h3>Allocation by consultant</h3>
+      {allocations.length === 0 ? (
+        <p className="empty">No active consultants.</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <caption className="sr-only">Total allocated per consultant</caption>
+            <thead>
+              <tr>
+                <th scope="col">Consultant</th>
+                <th scope="col">Team</th>
+                <th scope="col" className="num">Projects</th>
+                <th scope="col" className="num">Total allocated</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allocations.map((a) => (
+                <tr key={a.code}>
+                  <th scope="row">{a.code}</th>
+                  <td>{a.teamName}</td>
+                  <td className="num">{a.projectCount}</td>
+                  <td className="num">{a.allocatedPct}&nbsp;%</td>
+                  <td>
+                    {a.allocatedPct === 0 && <span className="flag">▲ unallocated</span>}
+                    {a.allocatedPct > 100 && <span className="flag">▲ over-allocated</span>}
+                    {a.allocatedPct > 0 && a.allocatedPct <= 100 && 'OK'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Dashboard 4: cobertura de competências e formação. */
+export function CoverageDashboard({ summary }: Props) {
+  const { skills, training } = summary;
+  const gaps = skills.coverage.filter((c) => c.gap > 0).length;
+  const uncovered = skills.coverage.filter((c) => c.gapAfterTraining > 0).length;
+  return (
+    <section aria-labelledby="cov-title">
+      <h2 id="cov-title">Skills &amp; training</h2>
+      <p className="muted-text">{updated(summary)}</p>
+
+      <dl className="kpis">
+        <div className="card"><dt>Skills in the catalogue</dt><dd>{skills.skillCount}</dd></div>
+        <div className="card"><dt>Assessments validated</dt><dd>{formatBp(skills.validatedRatioBp)}</dd></div>
+        <div className="card"><dt>Requirements with a gap</dt><dd>{gaps}</dd></div>
+        <div className="card"><dt>Gaps with no training plan</dt><dd>{uncovered}</dd></div>
+        <div className="card"><dt>Open training</dt><dd>{training.openCount}</dd></div>
+        <div className="card"><dt>Training overdue</dt><dd>{training.overdueCount}</dd></div>
+        {training.openCostCents > 0 && <div className="card"><dt>Open training cost</dt><dd>{formatCents(training.openCostCents)}</dd></div>}
+      </dl>
+
+      <BarChart
+        title="Qualified people against the minimum, by requirement"
+        legend={[{ series: 'a', name: 'Qualified' }, { series: 'b', name: 'In training' }]}
+        targetName="Minimum"
+        empty="No requirements set. Set them on the Skills page."
+        rows={skills.coverage.map((c) => ({
+          label: `${c.teamName} · ${c.skill}`,
+          segments: [
+            { series: 'a' as const, value: c.qualified, name: 'Qualified', text: String(c.qualified) },
+            { series: 'b' as const, value: c.inTraining, name: 'In training', text: String(c.inTraining) },
+          ],
+          target: c.minPeople,
+          targetText: String(c.minPeople),
+          valueText: `${c.qualified} / ${c.minPeople}`,
+        }))}
+      />
 
       <h3>Skill coverage</h3>
       {skills.coverage.length === 0 ? (
@@ -257,41 +455,6 @@ export function SummaryView({ summary }: { summary: Summary }) {
             </table>
           </div>
         </>
-      )}
-
-      <h3>Allocation by consultant</h3>
-      {allocations.length === 0 ? (
-        <p className="empty">No active consultants.</p>
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <caption className="sr-only">Total allocated per consultant</caption>
-            <thead>
-              <tr>
-                <th scope="col">Consultant</th>
-                <th scope="col">Team</th>
-                <th scope="col" className="num">Projects</th>
-                <th scope="col" className="num">Total allocated</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allocations.map((a) => (
-                <tr key={a.code}>
-                  <th scope="row">{a.code}</th>
-                  <td>{a.teamName}</td>
-                  <td className="num">{a.projectCount}</td>
-                  <td className="num">{a.allocatedPct}&nbsp;%</td>
-                  <td>
-                    {a.allocatedPct === 0 && <span className="flag">▲ unallocated</span>}
-                    {a.allocatedPct > 100 && <span className="flag">▲ over-allocated</span>}
-                    {a.allocatedPct > 0 && a.allocatedPct <= 100 && 'OK'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       )}
     </section>
   );
