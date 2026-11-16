@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Allocation, Consultant, Department, Evaluation, Profile, Objective, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
 import { api, ApiError } from './api.ts';
 import { applyTheme, readTheme, THEMES, type Theme } from './theme.ts';
+import { usePersistedState } from './usePersistedState.ts';
 import { SummaryView } from './views/SummaryView.tsx';
 import { TeamsView } from './views/TeamsView.tsx';
 import { ConsultantsView } from './views/ConsultantsView.tsx';
@@ -88,6 +89,11 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme);
 
+  // Grupos do menu fechados pelo utilizador (fica guardado no browser).
+  const [collapsed, setCollapsed] = usePersistedState<string[]>('gu:nav:collapsed', []);
+  const toggleGroup = (group: string) =>
+    setCollapsed((c) => (c.includes(group) ? c.filter((x) => x !== group) : [...c, group]));
+
   function chooseTheme(t: Theme) {
     setTheme(t);
     applyTheme(t);
@@ -159,14 +165,33 @@ export function App() {
           Menu
         </button>
         <span className="topbar-title">{ROUTES.find((r) => r.id === route)?.label}</span>
+        <fieldset className="theme-switch">
+          <legend className="sr-only">Tema</legend>
+          {THEMES.map((t) => (
+            <label key={t}>
+              <input type="radio" name="theme" value={t} checked={theme === t} onChange={() => chooseTheme(t)} />
+              <span>{THEME_LABEL[t]}</span>
+            </label>
+          ))}
+        </fieldset>
       </header>
       <aside id="sidebar" className={menuOpen ? 'sidebar open' : 'sidebar'}>
         <h1 className="brand">Gestão da Unidade</h1>
         <nav aria-label="Principal">
           {NAV.map((g) => (
             <div key={g.group} className="nav-group">
-              <h2 id={`nav-${g.group}`}>{g.group}</h2>
-              <ul aria-labelledby={`nav-${g.group}`}>
+              <h2>
+                <button
+                  type="button"
+                  id={`nav-${g.group}`}
+                  aria-expanded={!collapsed.includes(g.group)}
+                  aria-controls={`nav-list-${g.group}`}
+                  onClick={() => toggleGroup(g.group)}
+                >
+                  {g.group}
+                </button>
+              </h2>
+              <ul id={`nav-list-${g.group}`} aria-labelledby={`nav-${g.group}`} hidden={collapsed.includes(g.group)}>
                 {g.items.map((r) => (
                   <li key={r.id}>
                     <a href={`#/${r.id}`} aria-current={route === r.id ? 'page' : undefined}>
@@ -178,15 +203,6 @@ export function App() {
             </div>
           ))}
         </nav>
-        <fieldset className="theme-switch">
-          <legend>Tema</legend>
-          {THEMES.map((t) => (
-            <label key={t}>
-              <input type="radio" name="theme" value={t} checked={theme === t} onChange={() => chooseTheme(t)} />
-              <span>{THEME_LABEL[t]}</span>
-            </label>
-          ))}
-        </fieldset>
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
       <main className="content">
