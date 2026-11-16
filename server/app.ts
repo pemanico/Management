@@ -40,24 +40,24 @@ function send(res: ServerResponse, status: number, body: unknown, type = 'applic
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   if (!(req.headers['content-type'] ?? '').startsWith('application/json'))
-    throw new HttpError(415, 'Content-Type deve ser application/json.');
+    throw new HttpError(415, 'Content-Type must be application/json.');
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY) throw new HttpError(413, 'Pedido demasiado grande.');
+    if (size > MAX_BODY) throw new HttpError(413, 'Request too large.');
     chunks.push(chunk as Buffer);
   }
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
-    throw new HttpError(400, 'JSON inválido.');
+    throw new HttpError(400, 'Invalid JSON.');
   }
 }
 
 function parseId(s: string | undefined): number {
   const n = Number(s);
-  if (!Number.isSafeInteger(n) || n < 1) throw new HttpError(404, 'Não encontrado.');
+  if (!Number.isSafeInteger(n) || n < 1) throw new HttpError(404, 'Not found.');
   return n;
 }
 
@@ -70,12 +70,12 @@ export function createApp(db: Db): Server {
     try {
       // Defesa contra DNS rebinding: só aceita Host local.
       const host = (req.headers.host ?? '').replace(/:\d+$/, '');
-      if (!ALLOWED_HOSTS.has(host)) throw new HttpError(403, 'Host não permitido.');
+      if (!ALLOWED_HOSTS.has(host)) throw new HttpError(403, 'Host not allowed.');
 
       const url = new URL(req.url ?? '/', 'http://localhost');
       const parts = url.pathname.split('/').filter(Boolean); // ['api', 'teams', '1']
       const method = req.method ?? 'GET';
-      if (parts[0] !== 'api') throw new HttpError(404, 'Não encontrado.');
+      if (parts[0] !== 'api') throw new HttpError(404, 'Not found.');
       const [, resource, idPart, idPart2] = parts;
 
       if (resource === 'summary' && method === 'GET') {
@@ -239,7 +239,7 @@ export function createApp(db: Db): Server {
           );
           return send(res, 200, csv, 'text/csv');
         }
-        throw new HttpError(400, 'kind inválido.');
+        throw new HttpError(400, 'Invalid kind.');
       }
 
       if (resource === 'profiles') {
@@ -250,7 +250,7 @@ export function createApp(db: Db): Server {
           try {
             return send(res, 201, db.getProfile(db.createProfile(p.value)));
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Já existe um perfil com esse nome.');
+            if (isConstraint(e)) throw new HttpError(409, 'A profile with that name already exists.');
             throw e;
           }
         }
@@ -259,11 +259,11 @@ export function createApp(db: Db): Server {
           const p = parseProfile(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           const current = db.getProfile(id);
-          if (!current) throw new HttpError(404, 'Perfil não encontrado.');
+          if (!current) throw new HttpError(404, 'Profile not found.');
           try {
             db.renameProfile(id, p.value);
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Já existe um perfil com esse nome.');
+            if (isConstraint(e)) throw new HttpError(409, 'A profile with that name already exists.');
             throw e;
           }
           return send(res, 200, db.getProfile(id));
@@ -271,9 +271,9 @@ export function createApp(db: Db): Server {
         if (idPart && method === 'DELETE') {
           const id = parseId(idPart);
           const current = db.getProfile(id);
-          if (!current) throw new HttpError(404, 'Perfil não encontrado.');
+          if (!current) throw new HttpError(404, 'Profile not found.');
           if (db.profileInUse(current.name))
-            throw new HttpError(409, 'Há consultores com este perfil; muda-os para outro perfil primeiro.');
+            throw new HttpError(409, 'Some consultants use this profile; move them to another profile first.');
           db.deleteProfile(id);
           return send(res, 200, { ok: true });
         }
@@ -287,7 +287,7 @@ export function createApp(db: Db): Server {
           try {
             return send(res, 201, db.getDepartment(db.createDepartment(p.value)));
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Já existe um departamento com esse nome.');
+            if (isConstraint(e)) throw new HttpError(409, 'A department with that name already exists.');
             throw e;
           }
         }
@@ -296,20 +296,20 @@ export function createApp(db: Db): Server {
           const p = parseDepartment(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           try {
-            if (db.updateDepartment(id, p.value) === 0) throw new HttpError(404, 'Departamento não encontrado.');
+            if (db.updateDepartment(id, p.value) === 0) throw new HttpError(404, 'Department not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
-            if (isConstraint(e)) throw new HttpError(409, 'Já existe um departamento com esse nome.');
+            if (isConstraint(e)) throw new HttpError(409, 'A department with that name already exists.');
             throw e;
           }
           return send(res, 200, db.getDepartment(id));
         }
         if (idPart && method === 'DELETE') {
           try {
-            if (db.deleteDepartment(parseId(idPart)) === 0) throw new HttpError(404, 'Departamento não encontrado.');
+            if (db.deleteDepartment(parseId(idPart)) === 0) throw new HttpError(404, 'Department not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
-            if (isConstraint(e)) throw new HttpError(409, 'O departamento tem equipas ou pessoas; muda-as primeiro.');
+            if (isConstraint(e)) throw new HttpError(409, 'The department has teams or people; move them first.');
             throw e;
           }
           return send(res, 200, { ok: true });
@@ -319,15 +319,15 @@ export function createApp(db: Db): Server {
       // Perfil tem de vir da lista (página Perfis): todos com o mesmo nome, sem variantes escritas à mão.
       const checkProfile = (name: string) => {
         if (!db.listProfiles().some((p) => p.name === name))
-          throw new HttpError(400, 'Perfil fora da lista: escolhe um perfil da lista ou cria-o na página Perfis.');
+          throw new HttpError(400, 'Profile not in the list: choose one from the list or create it on the Profiles page.');
       };
 
       // Departamento tem de existir e ter pelo menos uma equipa (senão a pessoa não conta em nenhuma).
       const checkDepartment = (departmentId: number | null, needsTeams: boolean) => {
         if (departmentId === null) return;
-        if (!db.getDepartment(departmentId)) throw new HttpError(400, 'Departamento inexistente.');
+        if (!db.getDepartment(departmentId)) throw new HttpError(400, 'Department does not exist.');
         if (needsTeams && !db.listTeams().some((t) => t.departmentId === departmentId))
-          throw new HttpError(400, 'O departamento ainda não tem equipas: associa-lhe equipas primeiro.');
+          throw new HttpError(400, 'The department has no teams yet: assign teams to it first.');
       };
 
       if (resource === 'teams') {
@@ -339,7 +339,7 @@ export function createApp(db: Db): Server {
           try {
             return send(res, 201, db.getTeam(db.createTeam(p.value)));
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Já existe uma equipa com esse nome.');
+            if (isConstraint(e)) throw new HttpError(409, 'A team with that name already exists.');
             throw e;
           }
         }
@@ -349,18 +349,18 @@ export function createApp(db: Db): Server {
           if (!p.ok) throw new HttpError(400, p.error);
           checkDepartment(p.value.departmentId, false);
           try {
-            if (db.updateTeam(id, p.value) === 0) throw new HttpError(404, 'Equipa não encontrada.');
+            if (db.updateTeam(id, p.value) === 0) throw new HttpError(404, 'Team not found.');
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Já existe uma equipa com esse nome.');
+            if (isConstraint(e)) throw new HttpError(409, 'A team with that name already exists.');
             throw e;
           }
           return send(res, 200, db.getTeam(id));
         }
         if (idPart && method === 'DELETE') {
           try {
-            if (db.deleteTeam(parseId(idPart)) === 0) throw new HttpError(404, 'Equipa não encontrada.');
+            if (db.deleteTeam(parseId(idPart)) === 0) throw new HttpError(404, 'Team not found.');
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'A equipa tem consultores ou projetos; remove-os ou muda-os de equipa primeiro.');
+            if (isConstraint(e)) throw new HttpError(409, 'The team has consultants or projects; remove them or move them to another team first.');
             throw e;
           }
           return send(res, 200, { ok: true });
@@ -369,7 +369,7 @@ export function createApp(db: Db): Server {
 
       if (resource === 'consultants') {
         const saveGuard = (e: unknown): never => {
-          if (isConstraint(e)) throw new HttpError(409, 'Código já existe ou equipa inválida.');
+          if (isConstraint(e)) throw new HttpError(409, 'The code already exists or the team is invalid.');
           throw e;
         };
         if (!idPart && method === 'GET') return send(res, 200, db.listConsultants());
@@ -392,7 +392,7 @@ export function createApp(db: Db): Server {
           checkProfile(p.value.profile);
           try {
             if (db.updateConsultant(id, p.value) === 0)
-              throw new HttpError(404, 'Consultor não encontrado.');
+              throw new HttpError(404, 'Consultant not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
             return saveGuard(e);
@@ -401,14 +401,14 @@ export function createApp(db: Db): Server {
         }
         if (idPart && method === 'DELETE') {
           if (db.deleteConsultant(parseId(idPart)) === 0)
-            throw new HttpError(404, 'Consultor não encontrado.');
+            throw new HttpError(404, 'Consultant not found.');
           return send(res, 200, { ok: true });
         }
       }
 
       if (resource === 'projects') {
         const guard = (e: unknown): never => {
-          if (isConstraint(e)) throw new HttpError(409, 'Já existe um projeto com esse nome nesta equipa, ou a equipa é inválida.');
+          if (isConstraint(e)) throw new HttpError(409, 'A project with that name already exists in this team, or the team is invalid.');
           throw e;
         };
         if (!idPart && method === 'GET') return send(res, 200, db.listProjects());
@@ -426,7 +426,7 @@ export function createApp(db: Db): Server {
           const p = parseProject(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           try {
-            if (db.updateProject(id, p.value) === 0) throw new HttpError(404, 'Projeto não encontrado.');
+            if (db.updateProject(id, p.value) === 0) throw new HttpError(404, 'Project not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
             return guard(e);
@@ -434,7 +434,7 @@ export function createApp(db: Db): Server {
           return send(res, 200, db.getProject(id));
         }
         if (idPart && method === 'DELETE') {
-          if (db.deleteProject(parseId(idPart)) === 0) throw new HttpError(404, 'Projeto não encontrado.');
+          if (db.deleteProject(parseId(idPart)) === 0) throw new HttpError(404, 'Project not found.');
           return send(res, 200, { ok: true });
         }
       }
@@ -448,21 +448,21 @@ export function createApp(db: Db): Server {
           try {
             db.upsertAllocation(p.value);
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Projeto ou consultor inválidos.');
+            if (isConstraint(e)) throw new HttpError(409, 'Invalid project or consultant.');
             throw e;
           }
           return send(res, 200, db.getAllocation(p.value.projectId, p.value.consultantId));
         }
         if (idPart && idPart2 && method === 'DELETE') {
           if (db.deleteAllocation(parseId(idPart), parseId(idPart2)) === 0)
-            throw new HttpError(404, 'Alocação não encontrada.');
+            throw new HttpError(404, 'Allocation not found.');
           return send(res, 200, { ok: true });
         }
       }
 
       if (resource === 'skills') {
         const guard = (e: unknown): never => {
-          if (isConstraint(e)) throw new HttpError(409, 'Já existe uma competência com esse nome.');
+          if (isConstraint(e)) throw new HttpError(409, 'A skill with that name already exists.');
           throw e;
         };
         if (!idPart && method === 'GET') return send(res, 200, db.listSkills());
@@ -480,7 +480,7 @@ export function createApp(db: Db): Server {
           const p = parseSkill(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           try {
-            if (db.updateSkill(id, p.value) === 0) throw new HttpError(404, 'Competência não encontrada.');
+            if (db.updateSkill(id, p.value) === 0) throw new HttpError(404, 'Skill not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
             return guard(e);
@@ -488,14 +488,14 @@ export function createApp(db: Db): Server {
           return send(res, 200, db.getSkill(id));
         }
         if (idPart && method === 'DELETE') {
-          if (db.deleteSkill(parseId(idPart)) === 0) throw new HttpError(404, 'Competência não encontrada.');
+          if (db.deleteSkill(parseId(idPart)) === 0) throw new HttpError(404, 'Skill not found.');
           return send(res, 200, { ok: true });
         }
       }
 
       if (resource === 'objectives') {
         const guard = (e: unknown): never => {
-          if (isConstraint(e)) throw new HttpError(409, 'Consultor ou equipa inválidos.');
+          if (isConstraint(e)) throw new HttpError(409, 'Invalid consultant or team.');
           throw e;
         };
         if (!idPart && method === 'GET') return send(res, 200, db.listObjectives());
@@ -513,7 +513,7 @@ export function createApp(db: Db): Server {
           const p = parseObjective(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           try {
-            if (db.updateObjective(id, p.value) === 0) throw new HttpError(404, 'Objetivo não encontrado.');
+            if (db.updateObjective(id, p.value) === 0) throw new HttpError(404, 'Objective not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
             return guard(e);
@@ -521,7 +521,7 @@ export function createApp(db: Db): Server {
           return send(res, 200, db.getObjective(id));
         }
         if (idPart && method === 'DELETE') {
-          if (db.deleteObjective(parseId(idPart)) === 0) throw new HttpError(404, 'Objetivo não encontrado.');
+          if (db.deleteObjective(parseId(idPart)) === 0) throw new HttpError(404, 'Objective not found.');
           return send(res, 200, { ok: true });
         }
       }
@@ -529,7 +529,7 @@ export function createApp(db: Db): Server {
       if (resource === 'evaluations') {
         const guard = (e: unknown): never => {
           if (isConstraint(e))
-            throw new HttpError(409, 'Já existe uma avaliação deste consultor para esse período (ou o consultor é inválido).');
+            throw new HttpError(409, 'An evaluation for this consultant and period already exists (or the consultant is invalid).');
           throw e;
         };
         if (!idPart && method === 'GET') return send(res, 200, db.listEvaluations());
@@ -547,7 +547,7 @@ export function createApp(db: Db): Server {
           const p = parseEvaluation(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           try {
-            if (db.updateEvaluation(id, p.value) === 0) throw new HttpError(404, 'Avaliação não encontrada.');
+            if (db.updateEvaluation(id, p.value) === 0) throw new HttpError(404, 'Not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
             return guard(e);
@@ -555,14 +555,14 @@ export function createApp(db: Db): Server {
           return send(res, 200, db.getEvaluation(id));
         }
         if (idPart && method === 'DELETE') {
-          if (db.deleteEvaluation(parseId(idPart)) === 0) throw new HttpError(404, 'Avaliação não encontrada.');
+          if (db.deleteEvaluation(parseId(idPart)) === 0) throw new HttpError(404, 'Not found.');
           return send(res, 200, { ok: true });
         }
       }
 
       if (resource === 'trainings') {
         const guard = (e: unknown): never => {
-          if (isConstraint(e)) throw new HttpError(409, 'Consultor ou competência inválidos.');
+          if (isConstraint(e)) throw new HttpError(409, 'Invalid consultant or skill.');
           throw e;
         };
         if (!idPart && method === 'GET') return send(res, 200, db.listTrainings());
@@ -580,7 +580,7 @@ export function createApp(db: Db): Server {
           const p = parseTraining(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           try {
-            if (db.updateTraining(id, p.value) === 0) throw new HttpError(404, 'Formação não encontrada.');
+            if (db.updateTraining(id, p.value) === 0) throw new HttpError(404, 'Training not found.');
           } catch (e) {
             if (e instanceof HttpError) throw e;
             return guard(e);
@@ -588,7 +588,7 @@ export function createApp(db: Db): Server {
           return send(res, 200, db.getTraining(id));
         }
         if (idPart && method === 'DELETE') {
-          if (db.deleteTraining(parseId(idPart)) === 0) throw new HttpError(404, 'Formação não encontrada.');
+          if (db.deleteTraining(parseId(idPart)) === 0) throw new HttpError(404, 'Training not found.');
           return send(res, 200, { ok: true });
         }
       }
@@ -602,14 +602,14 @@ export function createApp(db: Db): Server {
           try {
             db.upsertRating(p.value);
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Consultor ou competência inválidos.');
+            if (isConstraint(e)) throw new HttpError(409, 'Invalid consultant or skill.');
             throw e;
           }
           return send(res, 200, db.getRating(p.value.consultantId, p.value.skillId));
         }
         if (idPart && idPart2 && method === 'DELETE') {
           if (db.deleteRating(parseId(idPart), parseId(idPart2)) === 0)
-            throw new HttpError(404, 'Avaliação não encontrada.');
+            throw new HttpError(404, 'Not found.');
           return send(res, 200, { ok: true });
         }
       }
@@ -622,23 +622,23 @@ export function createApp(db: Db): Server {
           try {
             db.upsertRequirement(p.value);
           } catch (e) {
-            if (isConstraint(e)) throw new HttpError(409, 'Equipa ou competência inválidas.');
+            if (isConstraint(e)) throw new HttpError(409, 'Invalid team or skill.');
             throw e;
           }
           return send(res, 200, db.getRequirement(p.value.teamId, p.value.skillId));
         }
         if (idPart && idPart2 && method === 'DELETE') {
           if (db.deleteRequirement(parseId(idPart), parseId(idPart2)) === 0)
-            throw new HttpError(404, 'Requisito não encontrado.');
+            throw new HttpError(404, 'Requirement not found.');
           return send(res, 200, { ok: true });
         }
       }
 
-      throw new HttpError(404, 'Não encontrado.');
+      throw new HttpError(404, 'Not found.');
     } catch (e) {
       if (e instanceof HttpError) return send(res, e.status, { error: e.message });
-      console.error('Erro interno:', e instanceof Error ? e.name : 'desconhecido');
-      return send(res, 500, { error: 'Erro interno. Tenta novamente.' });
+      console.error('Internal error:', e instanceof Error ? e.name : 'unknown');
+      return send(res, 500, { error: 'Internal error. Try again.' });
     }
   });
 }

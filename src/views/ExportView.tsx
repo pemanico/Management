@@ -9,32 +9,32 @@ export function ExportView({ summary }: { summary: Summary }) {
   async function copy() {
     try {
       await navigator.clipboard.writeText(payload);
-      setStatus('Copiado. Cola no Claude.');
+      setStatus('Copied. Paste it into Claude.');
     } catch {
-      setStatus('Não foi possível copiar automaticamente. Seleciona o texto e copia manualmente.');
+      setStatus('Could not copy automatically. Select the text and copy it manually.');
     }
   }
 
   return (
     <section aria-labelledby="exp-title">
-      <h2 id="exp-title">Exportar para o Claude</h2>
+      <h2 id="exp-title">Export to Claude</h2>
       <p>
-        Prompt mestre + resumo atual da unidade. Os consultores aparecem só como códigos agregados por equipa; confirma
-        com o teu compliance antes de colar dados reais numa ferramenta de IA externa.
+        Master prompt + current unit summary. Consultants only appear as codes aggregated by team; check with your
+        compliance team before pasting real data into an external AI tool.
       </p>
       <div className="actions">
-        <button type="button" className="primary" onClick={copy}>Copiar prompt + dados</button>
-        <a className="button" href="/api/export?kind=teams" download="equipas.csv">Descarregar equipas (CSV)</a>
-        <a className="button" href="/api/export?kind=consultants" download="consultores.csv">Descarregar consultores (CSV)</a>
-        <a className="button" href="/api/export?kind=projects" download="projetos.csv">Descarregar projetos (CSV)</a>
-        <a className="button" href="/api/export?kind=allocations" download="alocacoes.csv">Descarregar alocações (CSV)</a>
-        <a className="button" href="/api/export?kind=trainings" download="formacao.csv">Descarregar formação (CSV)</a>
-        <a className="button" href="/api/export?kind=objectives" download="objetivos.csv">Descarregar objetivos (CSV, local)</a>
-        <a className="button" href="/api/export?kind=evaluations" download="avaliacoes.csv">Descarregar avaliações (CSV, local)</a>
-        <a className="button" href="/api/export?kind=ratings" download="competencias.csv">Descarregar skill matrix (CSV)</a>
+        <button type="button" className="primary" onClick={copy}>Copy prompt + data</button>
+        <a className="button" href="/api/export?kind=teams" download="equipas.csv">Download teams (CSV)</a>
+        <a className="button" href="/api/export?kind=consultants" download="consultores.csv">Download consultants (CSV)</a>
+        <a className="button" href="/api/export?kind=projects" download="projetos.csv">Download projects (CSV)</a>
+        <a className="button" href="/api/export?kind=allocations" download="alocacoes.csv">Download allocations (CSV)</a>
+        <a className="button" href="/api/export?kind=trainings" download="formacao.csv">Download training (CSV)</a>
+        <a className="button" href="/api/export?kind=objectives" download="objetivos.csv">Download objectives (CSV, local)</a>
+        <a className="button" href="/api/export?kind=evaluations" download="avaliacoes.csv">Download evaluations (CSV, local)</a>
+        <a className="button" href="/api/export?kind=ratings" download="competencias.csv">Download skill matrix (CSV)</a>
       </div>
       <p role="status" aria-live="polite">{status}</p>
-      <label htmlFor="payload" className="sr-only">Prompt e dados</label>
+      <label htmlFor="payload" className="sr-only">Prompt and data</label>
       <textarea id="payload" readOnly rows={18} value={payload} />
     </section>
   );

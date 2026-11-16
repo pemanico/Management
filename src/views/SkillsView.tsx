@@ -51,8 +51,8 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
     e.preventDefault();
     setSkillError(undefined);
     if (name.trim() === '') {
-      setNameError('Indica o nome da competência.');
-      return failSkill('Corrige os campos assinalados.');
+      setNameError('Enter the skill name.');
+      return failSkill('Fix the highlighted fields.');
     }
     setNameError(undefined);
     setSavingSkill(true);
@@ -63,7 +63,7 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
       setCategory('');
       setEditingId(undefined);
     } catch (err) {
-      failSkill(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      failSkill(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSavingSkill(false);
     }
@@ -73,8 +73,8 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
     e.preventDefault();
     setReqError(undefined);
     const min = Number(reqMin);
-    if (reqTeam === '' || reqSkill === '') return failReq('Escolhe a equipa e a competência.');
-    if (!Number.isInteger(min) || min < 1) return failReq('O mínimo de pessoas deve ser um inteiro ≥ 1.');
+    if (reqTeam === '' || reqSkill === '') return failReq('Choose the team and the skill.');
+    if (!Number.isInteger(min) || min < 1) return failReq('Minimum people must be a whole number ≥ 1.');
     setSavingReq(true);
     try {
       await api.saveRequirement({
@@ -85,7 +85,7 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
       });
       await onChanged();
     } catch (err) {
-      failReq(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      failReq(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSavingReq(false);
     }
@@ -93,22 +93,22 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
 
   return (
     <section aria-labelledby="sk-title">
-      <h2 id="sk-title">Competências</h2>
+      <h2 id="sk-title">Skills</h2>
 
       <form onSubmit={submitSkill} noValidate className="card form-grid">
-        <h3>{editingId === undefined ? 'Nova competência' : 'Editar competência'}</h3>
+        <h3>{editingId === undefined ? 'New skill' : 'Edit skill'}</h3>
         {skillError && (
           <p ref={skillErrRef} tabIndex={-1} role="alert" className="error banner">{skillError}</p>
         )}
-        <Field label="Nome" hint="Ex.: PySpark, Oracle SQL, MiFID II" error={nameError}>
+        <Field label="Name" hint="E.g. PySpark, Oracle SQL, MiFID II" error={nameError}>
           {(c) => <input {...c} name="skill" type="text" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />}
         </Field>
-        <Field label="Categoria" hint="Opcional. Ex.: Dados, Negócio, Gestão">
+        <Field label="Category" hint="Optional. E.g. Data, Business, Management">
           {(c) => <input {...c} name="category" type="text" autoComplete="off" value={category} onChange={(e) => setCategory(e.target.value)} />}
         </Field>
         <div className="actions">
           <button type="submit" className="primary" disabled={savingSkill}>
-            {savingSkill ? 'A guardar…' : editingId === undefined ? 'Adicionar competência' : 'Guardar alterações'}
+            {savingSkill ? 'Saving…' : editingId === undefined ? 'Add skill' : 'Save changes'}
           </button>
           {editingId !== undefined && (
             <button
@@ -121,24 +121,24 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
                 setSkillError(undefined);
               }}
             >
-              Cancelar edição
+              Cancel editing
             </button>
           )}
         </div>
       </form>
 
       {skills.length === 0 ? (
-        <p className="empty">Ainda não há competências. Adiciona as 5–10 que realmente decidem a staffing; mais do que isso e a matriz deixa de ser mantida.</p>
+        <p className="empty">No skills yet. Add the 5–10 that really drive staffing; beyond that the matrix stops being maintained.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Catálogo de competências</caption>
+            <caption className="sr-only">Skill catalogue</caption>
             <thead>
               <tr>
-                <th scope="col">Competência</th>
-                <th scope="col">Categoria</th>
-                <th scope="col" className="num">Avaliações</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Skill</th>
+                <th scope="col">Category</th>
+                <th scope="col" className="num">Assessments</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -151,7 +151,7 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
                     <button
                       type="button"
                       className="link"
-                      aria-label={`Editar ${k.name}`}
+                      aria-label={`Edit ${k.name}`}
                       onClick={() => {
                         setEditingId(k.id);
                         setName(k.name);
@@ -160,16 +160,16 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
                         setSkillError(undefined);
                       }}
                     >
-                      Editar
+                      Edit
                     </button>
                     <ConfirmDelete
-                      label={`${k.name} e as suas ${ratingsPerSkill.get(k.id) ?? 0} avaliação(ões) e requisitos`}
+                      label={`${k.name} and its ${ratingsPerSkill.get(k.id) ?? 0} assessment(s) and requirements`}
                       onConfirm={async () => {
                         try {
                           await api.deleteSkill(k.id);
                           await onChanged();
                         } catch (err) {
-                          failSkill(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                          failSkill(err instanceof ApiError ? err.message : 'Something went wrong.');
                         }
                       }}
                     />
@@ -181,38 +181,38 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
         </div>
       )}
 
-      <h2>Requisitos por equipa</h2>
+      <h2>Requirements by team</h2>
       <p className="muted-text">
-        Define quantas pessoas ativas de cada equipa precisam de ter pelo menos um dado nível. Guardar o mesmo par equipa + competência atualiza o requisito.
+        Set how many active people in each team need at least a given level. Saving the same team + skill pair updates the requirement.
       </p>
       {teams.length === 0 || skills.length === 0 ? (
-        <p className="empty">Precisas de pelo menos uma equipa e uma competência.</p>
+        <p className="empty">You need at least one team and one skill.</p>
       ) : (
         <form onSubmit={submitReq} noValidate className="card form-grid">
           {reqError && (
             <p ref={reqErrRef} tabIndex={-1} role="alert" className="error banner">{reqError}</p>
           )}
-          <Field label="Equipa">
+          <Field label="Team">
             {(c) => (
               <select {...c} name="reqTeam" value={reqTeam} onChange={(e) => setReqTeam(e.target.value)}>
-                <option value="">Escolher…</option>
+                <option value="">Choose…</option>
                 {teams.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
             )}
           </Field>
-          <Field label="Competência">
+          <Field label="Skill">
             {(c) => (
               <select {...c} name="reqSkill" value={reqSkill} onChange={(e) => setReqSkill(e.target.value)}>
-                <option value="">Escolher…</option>
+                <option value="">Choose…</option>
                 {skills.map((k) => (
                   <option key={k.id} value={k.id}>{k.name}</option>
                 ))}
               </select>
             )}
           </Field>
-          <Field label="Nível mínimo exigido">
+          <Field label="Minimum required level">
             {(c) => (
               <select {...c} name="reqLevel" value={reqLevel} onChange={(e) => setReqLevel(e.target.value)}>
                 {[1, 2, 3, 4].map((l) => (
@@ -221,12 +221,12 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
               </select>
             )}
           </Field>
-          <Field label="Mínimo de pessoas" hint="Com esse nível ou superior">
+          <Field label="Minimum people" hint="At that level or above">
             {(c) => <input {...c} name="reqMin" type="number" inputMode="numeric" min={1} step={1} value={reqMin} onChange={(e) => setReqMin(e.target.value)} />}
           </Field>
           <div className="actions">
             <button type="submit" className="primary" disabled={savingReq}>
-              {savingReq ? 'A guardar…' : 'Guardar requisito'}
+              {savingReq ? 'Saving…' : 'Save requirement'}
             </button>
           </div>
         </form>
@@ -235,17 +235,17 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
       {requirements.length > 0 && (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Requisitos e cobertura atual</caption>
+            <caption className="sr-only">Requirements and current coverage</caption>
             <thead>
               <tr>
-                <th scope="col">Equipa</th>
-                <th scope="col">Competência</th>
-                <th scope="col" className="num">Nível exigido</th>
-                <th scope="col" className="num">Mínimo</th>
-                <th scope="col" className="num">Qualificados</th>
-                <th scope="col" className="num">Validados</th>
-                <th scope="col" className="num">Défice</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Team</th>
+                <th scope="col">Skill</th>
+                <th scope="col" className="num">Required level</th>
+                <th scope="col" className="num">Minimum</th>
+                <th scope="col" className="num">Qualified</th>
+                <th scope="col" className="num">Validated</th>
+                <th scope="col" className="num">Shortfall</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -267,13 +267,13 @@ export function SkillsView({ teams, skills, ratings, requirements, coverage, onC
                     </td>
                     <td className="row-actions">
                       <ConfirmDelete
-                        label={`requisito ${k} da equipa ${t}`}
+                        label={`requirement ${k} for team ${t}`}
                         onConfirm={async () => {
                           try {
                             await api.deleteRequirement(r.teamId, r.skillId);
                             await onChanged();
                           } catch (err) {
-                            failReq(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                            failReq(err instanceof ApiError ? err.message : 'Something went wrong.');
                           }
                         }}
                       />

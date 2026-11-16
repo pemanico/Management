@@ -385,8 +385,8 @@ test('headcount por tipo, fornecedores e custo de externos', async () => {
     let s = (await call('/api/summary')).data as any;
     assert.equal(s.teams[0].headcountGap, 0);
     const msgs = s.alerts.filter((a: any) => a.type === 'vacancies' || a.type === 'over_headcount').map((a: any) => a.message);
-    assert.ok(msgs.some((m: string) => m.includes('2 vaga(s) de interno')));
-    assert.ok(msgs.some((m: string) => m.includes('2 externo(s) acima')));
+    assert.ok(msgs.some((m: string) => m.includes('2 open internal position(s)')));
+    assert.ok(msgs.some((m: string) => m.includes('2 external over budget')));
     assert.equal(s.suppliers.length, 2); // Acme/acme agrupados
     assert.deepEqual(
       { ...s.suppliers[0] },
@@ -438,7 +438,7 @@ test('pessoas repartidas por equipas: headcount e custo em frações, sem dupla 
     assert.equal((await call(`/api/teams/${b}`, 'DELETE')).status, 200);
     s = (await call('/api/summary')).data as any;
     assert.deepEqual([s.teams[0].internalHeadcount, s.teams[0].externalHeadcount], [1, 2]);
-    assert.ok(s.alerts.some((x: any) => x.message.includes('0,5 interno(s) acima')));
+    assert.ok(s.alerts.some((x: any) => x.message.includes('0,5 internal over budget')));
   } finally {
     close();
   }
@@ -534,17 +534,17 @@ test('perfis: lista única, consultores só escolhem da lista, renomear propaga,
     const profiles = (await call('/api/profiles')).data as any[];
     assert.ok(profiles.some((p) => p.name === 'Big Data Trainee'));
     assert.ok(profiles.some((p) => p.name === 'Big Data Manager'));
-    const pleno = profiles.find((p) => p.name === 'Big Data Pleno');
+    const pleno = profiles.find((p) => p.name === 'Big Data Mid-level');
     const t = ((await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 0 })).data as any).id;
     const base = { teamId: t, extraTeams: [], seniority: 'pleno', kind: 'internal', supplier: null, costRateCentsPerDay: 0, contractEnd: null, status: 'active' };
     // perfil fora da lista é recusado; de dentro da lista é aceite
     assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'C1', profile: 'Engenheiro qualquer' })).status, 400);
-    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'C1', profile: 'Big Data Pleno' })).status, 201);
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'C1', profile: 'Big Data Mid-level' })).status, 201);
     // renomear o perfil atualiza quem o usa
-    assert.equal((await call(`/api/profiles/${pleno.id}`, 'PUT', { name: 'Big Data Pleno Sénior' })).status, 200);
-    assert.equal(((await call('/api/consultants')).data as any[])[0].profile, 'Big Data Pleno Sénior');
+    assert.equal((await call(`/api/profiles/${pleno.id}`, 'PUT', { name: 'Big Data Mid-Senior' })).status, 200);
+    assert.equal(((await call('/api/consultants')).data as any[])[0].profile, 'Big Data Mid-Senior');
     // não se apaga um perfil em uso
-    const renamed = ((await call('/api/profiles')).data as any[]).find((p) => p.name === 'Big Data Pleno Sénior');
+    const renamed = ((await call('/api/profiles')).data as any[]).find((p) => p.name === 'Big Data Mid-Senior');
     assert.equal((await call(`/api/profiles/${renamed.id}`, 'DELETE')).status, 409);
     const trainee = profiles.find((p) => p.name === 'Big Data Trainee');
     assert.equal((await call(`/api/profiles/${trainee.id}`, 'DELETE')).status, 200);

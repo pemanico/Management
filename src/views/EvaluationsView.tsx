@@ -24,8 +24,8 @@ type Props = {
   onChanged: () => Promise<void>;
 };
 
-const STATUS_LABEL: Record<EvaluationStatus, string> = { draft: 'Rascunho', final: 'Final' };
-const RATING_LABEL: Record<number, string> = { 1: '1 – Abaixo do esperado', 2: '2 – Parcialmente', 3: '3 – Cumpre', 4: '4 – Excede' };
+const STATUS_LABEL: Record<EvaluationStatus, string> = { draft: 'Draft', final: 'Final' };
+const RATING_LABEL: Record<number, string> = { 1: '1 – Below expectations', 2: '2 – Partially meets', 3: '3 – Meets', 4: '4 – Exceeds' };
 
 type Form = { consultantId: string; period: string; rating: string; summary: string; status: EvaluationStatus; evaluatedAt: string };
 type Errors = Partial<Record<keyof Form, string>>;
@@ -89,14 +89,14 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
   async function submit(e: FormEvent) {
     e.preventDefault();
     const next: Errors = {};
-    if (form.consultantId === '') next.consultantId = 'Escolhe o consultor.';
-    if (!PERIOD_RE.test(form.period)) next.period = 'Usa 2026, 2026-H1 ou 2026-H2.';
-    if (form.summary.length > 500) next.summary = 'Máximo 500 caracteres.';
-    if (form.status === 'final' && form.summary.trim() === '') next.summary = 'Uma avaliação final precisa de resumo com a evidência.';
-    if (form.evaluatedAt === '' || form.evaluatedAt > today) next.evaluatedAt = 'Data inválida (não pode ser futura).';
+    if (form.consultantId === '') next.consultantId = 'Choose the consultant.';
+    if (!PERIOD_RE.test(form.period)) next.period = 'Use 2026, 2026-H1 or 2026-H2.';
+    if (form.summary.length > 500) next.summary = 'Maximum 500 characters.';
+    if (form.status === 'final' && form.summary.trim() === '') next.summary = 'A final evaluation needs a summary with the evidence.';
+    if (form.evaluatedAt === '' || form.evaluatedAt > today) next.evaluatedAt = 'Invalid date (cannot be in the future).';
     setErrors(next);
     setFormError(undefined);
-    if (Object.keys(next).length > 0) return fail('Corrige os campos assinalados.');
+    if (Object.keys(next).length > 0) return fail('Fix the highlighted fields.');
     setSaving(true);
     try {
       await api.saveEvaluation(
@@ -113,7 +113,7 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
       await onChanged();
       reset();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -122,30 +122,30 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
   if (consultants.length === 0)
     return (
       <section aria-labelledby="ev-title">
-        <h2 id="ev-title">Avaliações</h2>
-        <p className="empty">Precisas de consultores (separador Consultores).</p>
+        <h2 id="ev-title">Evaluations</h2>
+        <p className="empty">You need consultants first (Consultants page).</p>
       </section>
     );
 
   return (
     <section aria-labelledby="ev-title">
-      <h2 id="ev-title">Avaliações</h2>
+      <h2 id="ev-title">Evaluations</h2>
       <p className="banner">
-        A classificação e o resumo são decisão tua e ficam só na base de dados local. A app e o Claude nunca propõem nem
-        calculam notas; ao Claude vão apenas contagens (finais, rascunhos, em falta).
+        The rating and the summary are your decision and stay in the local database only. The app and Claude never
+        suggest or calculate ratings; Claude only receives counts (final, draft, missing).
       </p>
 
       <h3>Ciclo {year}</h3>
       <div className="table-wrap">
         <table>
-          <caption className="sr-only">Estado das avaliações do ano corrente por consultor ativo</caption>
+          <caption className="sr-only">Current-year evaluation status by active consultant</caption>
           <thead>
             <tr>
-              <th scope="col">Consultor</th>
-              <th scope="col">Equipa</th>
-              <th scope="col" className="num">Objetivos (atingidos / total)</th>
-              <th scope="col">Avaliação {year}</th>
-              <th scope="col"><span className="sr-only">Ações</span></th>
+              <th scope="col">Consultant</th>
+              <th scope="col">Team</th>
+              <th scope="col" className="num">Objectives (achieved / total)</th>
+              <th scope="col">Evaluation {year}</th>
+              <th scope="col"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -157,10 +157,10 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
                   <th scope="row">{c.code}</th>
                   <td>{teamLabel(c, teamName)}</td>
                   <td className="num">{mine.filter((o) => o.status === 'achieved').length} / {mine.length}</td>
-                  <td>{ev ? STATUS_LABEL[ev.status] : <span className="flag">▲ por fazer</span>}</td>
+                  <td>{ev ? STATUS_LABEL[ev.status] : <span className="flag">▲ to do</span>}</td>
                   <td className="row-actions">
-                    <button type="button" className="link" onClick={() => startFor(c.id)} aria-label={`${ev ? 'Abrir' : 'Iniciar'} avaliação de ${c.code}`}>
-                      {ev ? 'Abrir' : 'Iniciar'}
+                    <button type="button" className="link" onClick={() => startFor(c.id)} aria-label={`${ev ? 'Open' : 'Start'} evaluation of ${c.code}`}>
+                      {ev ? 'Open' : 'Start'}
                     </button>
                   </td>
                 </tr>
@@ -171,22 +171,22 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
       </div>
 
       <form onSubmit={submit} noValidate className="card form-grid">
-        <h3>{editingId === undefined ? 'Nova avaliação' : 'Editar avaliação'}</h3>
+        <h3>{editingId === undefined ? 'New assessment' : 'Edit assessment'}</h3>
         {formError && <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">{formError}</p>}
-        <Field label="Consultor" error={errors.consultantId}>
+        <Field label="Consultant" error={errors.consultantId}>
           {(c) => (
             <select {...c} name="consultant" value={form.consultantId} disabled={editingId !== undefined} onChange={(e) => set('consultantId', e.target.value)}>
-              <option value="">Escolher…</option>
+              <option value="">Choose…</option>
               {active.map((p) => <option key={p.id} value={p.id}>{p.code} ({teamLabel(p, teamName)})</option>)}
             </select>
           )}
         </Field>
-        <Field label="Período" hint="2026, 2026-H1 ou 2026-H2" error={errors.period}>
+        <Field label="Period" hint="2026, 2026-H1 or 2026-H2" error={errors.period}>
           {(c) => <input {...c} name="period" type="text" autoComplete="off" value={form.period} onChange={(e) => set('period', e.target.value)} />}
         </Field>
         {relatedObjectives.length > 0 && (
           <div className="field">
-            <p><strong>Objetivos deste consultor neste período</strong></p>
+            <p><strong>This consultant's objectives in this period</strong></p>
             <ul>
               {relatedObjectives.map((o) => (
                 <li key={o.id}>{o.title}: {OBJECTIVE_STATUS_LABEL[o.status]}, {o.progressPct} %</li>
@@ -194,48 +194,48 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
             </ul>
           </div>
         )}
-        <Field label="Classificação (decisão tua)">
+        <Field label="Rating (your decision)">
           {(c) => (
             <select {...c} name="rating" value={form.rating} onChange={(e) => set('rating', e.target.value)}>
               {[1, 2, 3, 4].map((r) => <option key={r} value={r}>{RATING_LABEL[r]}</option>)}
             </select>
           )}
         </Field>
-        <Field label="Resumo e evidência" hint="Obrigatório numa avaliação final. Máx. 500 caracteres." error={errors.summary}>
+        <Field label="Summary and evidence" hint="Required for a final evaluation. Max. 500 characters." error={errors.summary}>
           {(c) => <textarea {...c} ref={summaryRef} name="summary" rows={4} maxLength={600} value={form.summary} onChange={(e) => set('summary', e.target.value)} />}
         </Field>
-        <Field label="Estado">
+        <Field label="Status">
           {(c) => (
             <select {...c} name="status" value={form.status} onChange={(e) => set('status', e.target.value as EvaluationStatus)}>
               {EVALUATION_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
             </select>
           )}
         </Field>
-        <Field label="Data da avaliação" error={errors.evaluatedAt}>
+        <Field label="Assessment date" error={errors.evaluatedAt}>
           {(c) => <input {...c} name="evaluatedAt" type="date" max={today} value={form.evaluatedAt} onChange={(e) => set('evaluatedAt', e.target.value)} />}
         </Field>
         <div className="actions">
           <button type="submit" className="primary" disabled={saving}>
-            {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar avaliação' : 'Guardar alterações'}
+            {saving ? 'Saving…' : editingId === undefined ? 'Add evaluation' : 'Save changes'}
           </button>
-          {editingId !== undefined && <button type="button" onClick={reset}>Cancelar edição</button>}
+          {editingId !== undefined && <button type="button" onClick={reset}>Cancel editing</button>}
         </div>
       </form>
 
       {evaluations.length === 0 ? (
-        <p className="empty">Ainda não há avaliações registadas.</p>
+        <p className="empty">No evaluations yet.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Avaliações registadas</caption>
+            <caption className="sr-only">Recorded evaluations</caption>
             <thead>
               <tr>
-                <th scope="col">Consultor</th>
-                <th scope="col">Período</th>
-                <th scope="col">Classificação</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Data</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Consultant</th>
+                <th scope="col">Period</th>
+                <th scope="col">Rating</th>
+                <th scope="col">Status</th>
+                <th scope="col">Date</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -249,15 +249,15 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
                     <td>{STATUS_LABEL[ev.status]}</td>
                     <td>{ev.evaluatedAt}</td>
                     <td className="row-actions">
-                      <button type="button" className="link" onClick={() => edit(ev)} aria-label={`Editar avaliação de ${code} ${ev.period}`}>Editar</button>
+                      <button type="button" className="link" onClick={() => edit(ev)} aria-label={`Edit evaluation of ${code} ${ev.period}`}>Edit</button>
                       <ConfirmDelete
-                        label={`avaliação de ${code} ${ev.period}`}
+                        label={`evaluation of ${code} ${ev.period}`}
                         onConfirm={async () => {
                           try {
                             await api.deleteEvaluation(ev.id);
                             await onChanged();
                           } catch (err) {
-                            fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                            fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                           }
                         }}
                       />

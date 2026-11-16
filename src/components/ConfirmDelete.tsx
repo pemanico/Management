@@ -9,12 +9,12 @@ export function ConfirmDelete({ label, onConfirm }: Props) {
 
   if (!asking)
     return (
-      <button type="button" className="link danger" onClick={() => setAsking(true)} aria-label={`Apagar ${label}`}>
-        Apagar
+      <button type="button" className="link danger" onClick={() => setAsking(true)} aria-label={`Delete ${label}`}>
+        Delete
       </button>
     );
   return (
-    <span className="confirm" role="group" aria-label={`Confirmar apagar ${label}`}>
+    <span className="confirm" role="group" aria-label={`Confirm delete ${label}`}>
       <button
         type="button"
         className="danger"
@@ -29,10 +29,10 @@ export function ConfirmDelete({ label, onConfirm }: Props) {
           }
         }}
       >
-        Confirmar apagar
+        Confirm delete
       </button>
       <button type="button" className="link" onClick={() => setAsking(false)}>
-        Cancelar
+        Cancel
       </button>
     </span>
   );

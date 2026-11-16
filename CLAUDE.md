@@ -29,7 +29,7 @@ Node >= 22.13. Os ficheiros `.ts` correm diretamente com `--experimental-strip-t
 8. **Dependências**: não acrescentar dependências sem o utilizador aprovar. Runtime: só React. Backend sem framework.
 9. **Segurança da API**: só `127.0.0.1`, verificação do header Host, JSON obrigatório, corpo ≤ 64 KB, mensagens de erro 500 genéricas. Não relaxar.
 10. **CSV**: usar `toCsv`/`csvCell` (proteção contra CSV injection, separador `;`).
-11. **UI**: português europeu; acessibilidade (labels ligadas, `aria-live`, foco no erro, sem diálogos nativos); estados de loading/erro/vazio; filtros refletidos na URL.
+11. **UI**: inglês na interface e nas mensagens do servidor (números e datas continuam em formato PT; prompt para o Claude, CSV, docs e comentários em português); acessibilidade (labels ligadas, `aria-live`, foco no erro, sem diálogos nativos); estados de loading/erro/vazio; filtros refletidos na URL.
 
 ## Como acrescentar uma entidade ou campo
 

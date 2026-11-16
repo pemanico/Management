@@ -27,9 +27,9 @@ const EMPTY: Form = {
   code: '', teamId: '', departmentId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', supplier: '', contractEnd: '', status: 'active', extra: [],
 };
 
-const SENIORITY_LABEL: Record<Seniority, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sénior', lead: 'Lead' };
-const KIND_LABEL: Record<ConsultantKind, string> = { internal: 'Interno', external: 'Externo' };
-const STATUS_LABEL: Record<Status, string> = { active: 'Ativo', inactive: 'Inativo' };
+const SENIORITY_LABEL: Record<Seniority, string> = { junior: 'Junior', pleno: 'Mid-level', senior: 'Senior', lead: 'Lead' };
+const KIND_LABEL: Record<ConsultantKind, string> = { internal: 'Internal', external: 'External' };
+const STATUS_LABEL: Record<Status, string> = { active: 'Active', inactive: 'Inactive' };
 
 export function ConsultantsView({ teams, departments, profiles, consultants, onChanged }: Props) {
   const [form, setForm] = usePersistedState<Form>('gu:consultores:form', EMPTY);
@@ -84,25 +84,25 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
     // Internos: não se regista rate nem salário.
     const costCents = external ? parseEuroToCents(form.cost) : 0;
     const supplier = external ? form.supplier.trim() : '';
-    if (!/^[A-Za-z0-9_-]{1,20}$/.test(form.code.trim())) next.code = 'Usa um código (ex.: C001), sem espaços nem nomes reais.';
+    if (!/^[A-Za-z0-9_-]{1,20}$/.test(form.code.trim())) next.code = 'Use a code (e.g. C001), with no spaces or real names.';
     if (ofDept) {
-      if (deptTeams.length === 0) next.departmentId = 'Este departamento ainda não tem equipas.';
+      if (deptTeams.length === 0) next.departmentId = 'This department has no teams yet.';
     } else {
-      if (form.teamId === '') next.teamId = 'Escolhe uma equipa ou um departamento.';
+      if (form.teamId === '') next.teamId = 'Choose a team or a department.';
       const extraOk =
         form.extra.every((x) => x.teamId !== '' && x.teamId !== form.teamId && /^\d{1,2}$/.test(x.pct) && Number(x.pct) >= 1) &&
         new Set(form.extra.map((x) => x.teamId)).size === form.extra.length &&
         extraSum <= 99;
       if (!extraOk)
-        next.extra = 'Cada equipa adicional precisa de equipa (diferente da principal, sem repetir) e de 1 a 99 %; a soma tem de ficar abaixo de 100 %.';
+        next.extra = 'Each additional team needs a team (different from the main one, no repeats) and 1 to 99 %; the total must stay below 100 %.';
     }
-    if (form.profile === '') next.profile = 'Escolhe um perfil da lista (ou cria-o na página Perfis).';
-    if (costCents === null) next.cost = 'Formato inválido. Exemplo: 450,00';
-    else if (external && costCents === 0) next.cost = 'Um externo precisa de rate maior que zero.';
-    if (external && (supplier === '' || supplier.length > 60)) next.supplier = 'Indica o fornecedor (máx. 60 caracteres).';
+    if (form.profile === '') next.profile = 'Choose a profile from the list (or create it on the Profiles page).';
+    if (costCents === null) next.cost = 'Invalid format. Example: 450,00';
+    else if (external && costCents === 0) next.cost = 'An external consultant needs a rate above zero.';
+    if (external && (supplier === '' || supplier.length > 60)) next.supplier = 'Enter the supplier (max. 60 characters).';
     setErrors(next);
     setFormError(undefined);
-    if (Object.keys(next).length > 0 || costCents === null) return fail('Corrige os campos assinalados.');
+    if (Object.keys(next).length > 0 || costCents === null) return fail('Fix the highlighted fields.');
 
     setSaving(true);
     try {
@@ -125,7 +125,7 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
       await onChanged();
       reset();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -152,28 +152,28 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
 
   return (
     <section aria-labelledby="cons-title">
-      <h2 id="cons-title">Consultores &amp; rates</h2>
+      <h2 id="cons-title">Consultants &amp; rates</h2>
       {teams.length === 0 ? (
-        <p className="empty">Cria primeiro uma equipa no separador Equipas.</p>
+        <p className="empty">Create a team on the Teams page first.</p>
       ) : (
         <form onSubmit={submit} noValidate className="card form-grid">
-          <h3>{editingId === undefined ? 'Novo consultor' : 'Editar consultor'}</h3>
+          <h3>{editingId === undefined ? 'New consultant' : 'Edit consultant'}</h3>
           {formError && (
             <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">
               {formError}
             </p>
           )}
-          <Field label="Código (pseudónimo)" hint="Ex.: C001. Não uses nomes reais." error={errors.code}>
+          <Field label="Code (pseudonym)" hint="E.g. C001. Do not use real names." error={errors.code}>
             {(c) => <input {...c} name="code" type="text" autoComplete="off" value={form.code} onChange={set('code')} />}
           </Field>
           <Field
-            label="Departamento"
-            hint="Só para o manager: conta por igual em todas as equipas do departamento. Deixa vazio para uma equipa."
+            label="Department"
+            hint="Manager only: counts equally in every team of the department. Leave empty for a team member."
             error={errors.departmentId}
           >
             {(c) => (
               <select {...c} name="department" value={form.departmentId} onChange={chooseDept}>
-                <option value="">Nenhum (pessoa de equipa)</option>
+                <option value="">None (team member)</option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
@@ -181,10 +181,10 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
             )}
           </Field>
           {!ofDept && (
-            <Field label="Equipa principal" hint="Onde contam skills e objetivos" error={errors.teamId}>
+            <Field label="Main team" hint="Where skills and objectives count" error={errors.teamId}>
               {(c) => (
                 <select {...c} name="team" value={form.teamId} onChange={set('teamId')}>
-                  <option value="">Escolher…</option>
+                  <option value="">Choose…</option>
                   {teams.map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
@@ -192,13 +192,13 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
               )}
             </Field>
           )}
-          <Field label="Perfil" hint="Lista única; os perfis criam-se e renomeiam na página Perfis." error={errors.profile}>
+          <Field label="Profile" hint="Single list; create and rename profiles on the Profiles page." error={errors.profile}>
             {(c) => (
               <select {...c} name="profile" value={form.profile} onChange={set('profile')}>
-                <option value="">Escolher…</option>
+                <option value="">Choose…</option>
                 {/* Mantém o perfil atual visível mesmo que já não esteja na lista (evita perder o valor ao editar). */}
                 {form.profile !== '' && !profiles.some((p) => p.name === form.profile) && (
-                  <option value={form.profile}>{form.profile} (fora da lista)</option>
+                  <option value={form.profile}>{form.profile} (not in the list)</option>
                 )}
                 {profiles.map((p) => (
                   <option key={p.id} value={p.name}>{p.name}</option>
@@ -206,7 +206,7 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
               </select>
             )}
           </Field>
-          <Field label="Senioridade">
+          <Field label="Seniority">
             {(c) => (
               <select {...c} name="seniority" value={form.seniority} onChange={set('seniority')}>
                 {SENIORITIES.map((s) => (
@@ -215,7 +215,7 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
               </select>
             )}
           </Field>
-          <Field label="Tipo" hint="Internos: sem rate nem salário registados">
+          <Field label="Type" hint="Internal staff: no rate or salary is stored">
             {(c) => (
               <select {...c} name="kind" value={form.kind} onChange={set('kind')}>
                 {CONSULTANT_KINDS.map((k) => (
@@ -226,10 +226,10 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
           </Field>
           {form.kind === 'external' && (
             <>
-              <Field label="Fornecedor" hint="Empresa que coloca o consultor" error={errors.supplier}>
+              <Field label="Supplier" hint="Company that supplies the consultant" error={errors.supplier}>
                 {(c) => <input {...c} name="supplier" type="text" list="supplier-options" autoComplete="off" value={form.supplier} onChange={set('supplier')} />}
               </Field>
-              <Field label="Rate por dia (EUR)" hint="Rate diária. Custo calculado a 20 dias × 11 meses." error={errors.cost}>
+              <Field label="Rate per day (EUR)" hint="Daily rate. Cost is calculated at 20 days × 11 months." error={errors.cost}>
                 {(c) => <input {...c} name="cost" type="text" inputMode="decimal" autoComplete="off" value={form.cost} onChange={set('cost')} />}
               </Field>
               <datalist id="supplier-options">
@@ -237,10 +237,10 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
               </datalist>
             </>
           )}
-          <Field label="Fim de contrato" hint="Opcional">
+          <Field label="Contract end" hint="Optional">
             {(c) => <input {...c} name="contractEnd" type="date" value={form.contractEnd} onChange={set('contractEnd')} />}
           </Field>
-          <Field label="Estado">
+          <Field label="Status">
             {(c) => (
               <select {...c} name="status" value={form.status} onChange={set('status')}>
                 {STATUSES.map((s) => (
@@ -251,21 +251,21 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
           </Field>
           {!ofDept && (
           <fieldset className="shares">
-            <legend>Outras equipas (opcional)</legend>
+            <legend>Other teams (optional)</legend>
             <p className="hint">
-              Para quem está em mais de uma equipa (manager, gestor de projeto, arquiteto transversal). O headcount e o custo
-              repartem-se pelas percentagens; a equipa principal fica com o resto: <strong>{100 - extraSum} %</strong>.
+              For people in more than one team (project manager, cross-team architect). Headcount and cost are split by
+              the percentages; the main team keeps the rest: <strong>{100 - extraSum} %</strong>.
             </p>
             {form.extra.map((x, i) => (
               <div key={i} className="share-row">
-                <select aria-label={`Outra equipa ${i + 1}`} value={x.teamId} onChange={(e) => setExtra(i, { teamId: e.target.value })}>
-                  <option value="">Escolher…</option>
+                <select aria-label={`Other team ${i + 1}`} value={x.teamId} onChange={(e) => setExtra(i, { teamId: e.target.value })}>
+                  <option value="">Choose…</option>
                   {teams.filter((t) => String(t.id) !== form.teamId).map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
                 <input
-                  aria-label={`Percentagem na outra equipa ${i + 1}`}
+                  aria-label={`Percentage in other team ${i + 1}`}
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
@@ -273,50 +273,50 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
                   value={x.pct}
                   onChange={(e) => setExtra(i, { pct: e.target.value })}
                 />
-                <button type="button" className="link danger" onClick={() => removeExtra(i)} aria-label={`Remover outra equipa ${i + 1}`}>
-                  Remover
+                <button type="button" className="link danger" onClick={() => removeExtra(i)} aria-label={`Remove other team ${i + 1}`}>
+                  Remove
                 </button>
               </div>
             ))}
             {errors.extra && <small className="error" role="alert">{errors.extra}</small>}
             <div className="actions">
-              <button type="button" onClick={addExtra} disabled={teams.length < 2}>Adicionar outra equipa</button>
+              <button type="button" onClick={addExtra} disabled={teams.length < 2}>Add another team</button>
               <button type="button" onClick={splitAll} disabled={teams.length < 2 || form.teamId === ''}>
-                Repartir por todas as equipas
+                Split across all teams
               </button>
             </div>
           </fieldset>
           )}
           <div className="actions">
             <button type="submit" className="primary" disabled={saving}>
-              {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar consultor' : 'Guardar alterações'}
+              {saving ? 'Saving…' : editingId === undefined ? 'Add consultant' : 'Save changes'}
             </button>
             {editingId !== undefined && (
-              <button type="button" onClick={reset}>Cancelar edição</button>
+              <button type="button" onClick={reset}>Cancel editing</button>
             )}
           </div>
         </form>
       )}
 
       {consultants.length === 0 ? (
-        teams.length > 0 && <p className="empty">Ainda não há consultores registados.</p>
+        teams.length > 0 && <p className="empty">No consultants yet.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Consultores e rates</caption>
+            <caption className="sr-only">Consultants and rates</caption>
             <thead>
               <tr>
-                <th scope="col">Código</th>
-                <th scope="col">Equipa(s)</th>
-                <th scope="col">Perfil</th>
-                <th scope="col">Senioridade</th>
-                <th scope="col">Tipo</th>
-                <th scope="col">Fornecedor</th>
-                <th scope="col" className="num">Rate/dia</th>
-                <th scope="col" className="num">Custo/ano</th>
-                <th scope="col">Fim contrato</th>
-                <th scope="col">Estado</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Code</th>
+                <th scope="col">Team(s)</th>
+                <th scope="col">Profile</th>
+                <th scope="col">Seniority</th>
+                <th scope="col">Type</th>
+                <th scope="col">Supplier</th>
+                <th scope="col" className="num">Rate/day</th>
+                <th scope="col" className="num">Cost/year</th>
+                <th scope="col">Contract end</th>
+                <th scope="col">Status</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -326,7 +326,7 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
                   <td>
                     {c.teamId !== null
                       ? teamLabel(c, teamName)
-                      : `Departamento ${departments.find((d) => d.id === c.departmentId)?.name ?? '—'}`}
+                      : `Department ${departments.find((d) => d.id === c.departmentId)?.name ?? '—'}`}
                     {c.extraTeams.length > 0 && (
                       <>
                         {' '}{100 - c.extraTeams.reduce((a, x) => a + x.pct, 0)} %
@@ -337,9 +337,9 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
                   <td>{c.profile}</td>
                   <td>{SENIORITY_LABEL[c.seniority]}</td>
                   <td>{KIND_LABEL[c.kind]}</td>
-                  <td>{c.kind === 'internal' ? '—' : (c.supplier ?? <span className="flag">▲ em falta</span>)}</td>
+                  <td>{c.kind === 'internal' ? '—' : (c.supplier ?? <span className="flag">▲ missing</span>)}</td>
                   <td className="num">
-                    {c.kind === 'internal' ? '—' : c.costRateCentsPerDay > 0 ? formatCents(c.costRateCentsPerDay) : <span className="flag">▲ em falta</span>}
+                    {c.kind === 'internal' ? '—' : c.costRateCentsPerDay > 0 ? formatCents(c.costRateCentsPerDay) : <span className="flag">▲ missing</span>}
                   </td>
                   <td className="num">
                     {c.kind === 'internal' || c.costRateCentsPerDay === 0
@@ -349,8 +349,8 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
                   <td>{c.contractEnd ?? '—'}</td>
                   <td>{STATUS_LABEL[c.status]}</td>
                   <td className="row-actions">
-                    <button type="button" className="link" onClick={() => edit(c)} aria-label={`Editar ${c.code}`}>
-                      Editar
+                    <button type="button" className="link" onClick={() => edit(c)} aria-label={`Edit ${c.code}`}>
+                      Edit
                     </button>
                     <ConfirmDelete
                       label={c.code}
@@ -359,7 +359,7 @@ export function ConsultantsView({ teams, departments, profiles, consultants, onC
                           await api.deleteConsultant(c.id);
                           await onChanged();
                         } catch (err) {
-                          fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                          fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                         }
                       }}
                     />

@@ -50,18 +50,18 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
     e.preventDefault();
     const next: typeof errors = {};
     const pct = Number(pctText);
-    if (projectId === '') next.projectId = 'Escolhe o projeto.';
-    if (consultantId === '') next.consultantId = 'Escolhe o consultor.';
-    if (!Number.isInteger(pct) || pct < 1 || pct > 100) next.pct = 'Indica um inteiro entre 1 e 100.';
+    if (projectId === '') next.projectId = 'Choose the project.';
+    if (consultantId === '') next.consultantId = 'Choose the consultant.';
+    if (!Number.isInteger(pct) || pct < 1 || pct > 100) next.pct = 'Enter a whole number from 1 to 100.';
     setErrors(next);
     setFormError(undefined);
-    if (Object.keys(next).length > 0) return fail('Corrige os campos assinalados.');
+    if (Object.keys(next).length > 0) return fail('Fix the highlighted fields.');
     setSaving(true);
     try {
       await api.saveAllocation({ projectId: Number(projectId), consultantId: Number(consultantId), allocationPct: pct });
       await onChanged();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -70,53 +70,53 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
   if (projects.length === 0 || consultants.length === 0)
     return (
       <section aria-labelledby="al-title">
-        <h2 id="al-title">Alocações</h2>
-        <p className="empty">Precisas de consultores (separador Consultores) e de projetos (separador Projetos).</p>
+        <h2 id="al-title">Allocations</h2>
+        <p className="empty">You need consultants (Consultants page) and projects (Projects page) first.</p>
       </section>
     );
 
   return (
     <section aria-labelledby="al-title">
-      <h2 id="al-title">Alocações</h2>
+      <h2 id="al-title">Allocations</h2>
       <p className="muted-text">
-        Quem está em que projeto e com que % do tempo. 100 % = 1 FTE. Guardar o mesmo par projeto + consultor atualiza a alocação.
+        Who is on which project and for what % of their time. 100 % = 1 FTE. Saving the same project + consultant pair updates the allocation.
       </p>
 
       <form onSubmit={submit} noValidate className="card form-grid">
         {formError && <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">{formError}</p>}
-        <Field label="Projeto" error={errors.projectId}>
+        <Field label="Project" error={errors.projectId}>
           {(c) => (
             <select {...c} name="project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">Escolher…</option>
+              <option value="">Choose…</option>
               {openProjects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name} ({teamLabel(p, teamName)})</option>
               ))}
             </select>
           )}
         </Field>
-        <Field label="Consultor" error={errors.consultantId}>
+        <Field label="Consultant" error={errors.consultantId}>
           {(c) => (
             <select {...c} name="consultant" value={consultantId} onChange={(e) => setConsultantId(e.target.value)}>
-              <option value="">Escolher…</option>
+              <option value="">Choose…</option>
               {active.map((p) => (
                 <option key={p.id} value={p.id}>{p.code} ({teamLabel(p, teamName)})</option>
               ))}
             </select>
           )}
         </Field>
-        <Field label="Alocação (%)" hint="1–100" error={errors.pct}>
+        <Field label="Allocation (%)" hint="1–100" error={errors.pct}>
           {(c) => <input {...c} name="pct" type="number" inputMode="numeric" min={1} max={100} step={1} value={pctText} onChange={(e) => setPctText(e.target.value)} />}
         </Field>
         <div className="actions">
-          <button type="submit" className="primary" disabled={saving}>{saving ? 'A guardar…' : 'Guardar alocação'}</button>
+          <button type="submit" className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save allocation'}</button>
         </div>
       </form>
 
       <div className="card">
-        <Field label="Filtrar por projeto">
+        <Field label="Filter by project">
           {(c) => (
             <select {...c} name="filter" value={projectFilter} onChange={(e) => onFilter(e.target.value)}>
-              <option value="">Todos os projetos</option>
+              <option value="">All projects</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -126,18 +126,18 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
       </div>
 
       {visible.length === 0 ? (
-        <p className="empty">Ainda não há alocações {projectFilter === '' ? '' : 'neste projeto'}.</p>
+        <p className="empty">No allocations yet{projectFilter === '' ? '' : ' on this project'}.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Alocações por projeto</caption>
+            <caption className="sr-only">Allocations by project</caption>
             <thead>
               <tr>
-                <th scope="col">Projeto</th>
-                <th scope="col">Consultor</th>
-                <th scope="col">Equipa do consultor</th>
-                <th scope="col" className="num">Alocação</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Project</th>
+                <th scope="col">Consultant</th>
+                <th scope="col">Consultant's team</th>
+                <th scope="col" className="num">Allocation</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -154,7 +154,7 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
                       <button
                         type="button"
                         className="link"
-                        aria-label={`Editar alocação de ${c?.code ?? ''} em ${p?.name ?? ''}`}
+                        aria-label={`Edit allocation of ${c?.code ?? ''} to ${p?.name ?? ''}`}
                         onClick={() => {
                           setProjectId(String(a.projectId));
                           setConsultantId(String(a.consultantId));
@@ -163,16 +163,16 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
                           setFormError(undefined);
                         }}
                       >
-                        Editar
+                        Edit
                       </button>
                       <ConfirmDelete
-                        label={`alocação de ${c?.code ?? ''} em ${p?.name ?? ''}`}
+                        label={`allocation of ${c?.code ?? ''} to ${p?.name ?? ''}`}
                         onConfirm={async () => {
                           try {
                             await api.deleteAllocation(a.projectId, a.consultantId);
                             await onChanged();
                           } catch (err) {
-                            fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                            fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                           }
                         }}
                       />
@@ -185,17 +185,17 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
         </div>
       )}
 
-      <h3>Por consultor ativo</h3>
+      <h3>By active consultant</h3>
       <div className="table-wrap">
         <table>
-          <caption className="sr-only">Total alocado por consultor</caption>
+          <caption className="sr-only">Total allocated per consultant</caption>
           <thead>
             <tr>
-              <th scope="col">Consultor</th>
-              <th scope="col">Equipa</th>
-              <th scope="col" className="num">Projetos</th>
-              <th scope="col" className="num">Total alocado</th>
-              <th scope="col">Situação</th>
+              <th scope="col">Consultant</th>
+              <th scope="col">Team</th>
+              <th scope="col" className="num">Projects</th>
+              <th scope="col" className="num">Total allocated</th>
+              <th scope="col">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -208,8 +208,8 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
                   <td className="num">{t.projects}</td>
                   <td className="num">{t.pct}&nbsp;% ({fte(t.pct)}&nbsp;FTE)</td>
                   <td>
-                    {t.pct === 0 && <span className="flag">▲ sem alocação</span>}
-                    {t.pct > 100 && <span className="flag">▲ sobre-alocado</span>}
+                    {t.pct === 0 && <span className="flag">▲ unallocated</span>}
+                    {t.pct > 100 && <span className="flag">▲ over-allocated</span>}
                     {t.pct > 0 && t.pct <= 100 && 'OK'}
                   </td>
                 </tr>

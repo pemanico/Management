@@ -77,14 +77,14 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const next: typeof errors = {};
-    if (form.consultantId === '') next.consultantId = 'Escolhe o consultor.';
-    if (form.skillId === '') next.skillId = 'Escolhe a competência.';
+    if (form.consultantId === '') next.consultantId = 'Choose the consultant.';
+    if (form.skillId === '') next.skillId = 'Choose the skill.';
     if (form.validated && form.evidence.trim() === '')
-      next.evidence = 'Uma avaliação validada precisa de evidência (projeto, certificação, entrega).';
-    if (form.assessedAt === '' || form.assessedAt > todayIso()) next.assessedAt = 'Indica uma data que não seja futura.';
+      next.evidence = 'A validated assessment needs evidence (project, certification, delivery).';
+    if (form.assessedAt === '' || form.assessedAt > todayIso()) next.assessedAt = 'Enter a date that is not in the future.';
     setErrors(next);
     setFormError(undefined);
-    if (Object.keys(next).length > 0) return fail('Corrige os campos assinalados.');
+    if (Object.keys(next).length > 0) return fail('Fix the highlighted fields.');
 
     setSaving(true);
     try {
@@ -98,7 +98,7 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
       });
       await onChanged();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -108,7 +108,7 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
     return (
       <section aria-labelledby="mx-title">
         <h2 id="mx-title">Skill matrix</h2>
-        <p className="empty">Precisas de consultores (separador Consultores) e de competências (separador Competências).</p>
+        <p className="empty">You need consultants (Consultants page) and skills (Skills page) first.</p>
       </section>
     );
 
@@ -116,17 +116,17 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
     <section aria-labelledby="mx-title">
       <h2 id="mx-title">Skill matrix</h2>
       <p className="muted-text">
-        Legenda: <strong>✓</strong> validada com evidência · <strong>?</strong> autoavaliação · <strong>▲</strong> abaixo do exigido para a equipa · <strong>—</strong> sem avaliação.
-        Níveis: {SKILL_LEVEL_LABEL.join(' · ')}.
+        Legend: <strong>✓</strong> validated with evidence · <strong>?</strong> self-assessment · <strong>▲</strong> below the team requirement · <strong>—</strong> not assessed.
+        Levels: {SKILL_LEVEL_LABEL.join(' · ')}.
       </p>
 
       <div className="table-wrap">
         <table>
-          <caption className="sr-only">Matriz de competências por consultor</caption>
+          <caption className="sr-only">Skill matrix by consultant</caption>
           <thead>
             <tr>
-              <th scope="col">Consultor</th>
-              <th scope="col">Equipa</th>
+              <th scope="col">Consultant</th>
+              <th scope="col">Team</th>
               {skills.map((k) => (
                 <th key={k.id} scope="col" className="num">{k.name}</th>
               ))}
@@ -140,7 +140,7 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
                   {teamLabel(c, teamName)}
                   {c.extraTeams.length > 0 && (
                     <span className="muted-text">
-                      {' '}(partilhado: {c.extraTeams.map((x) => `${teamName.get(x.teamId) ?? '—'} ${x.pct} %`).join(', ')})
+                      {' '}(shared: {c.extraTeams.map((x) => `${teamName.get(x.teamId) ?? '—'} ${x.pct} %`).join(', ')})
                     </span>
                   )}
                 </td>
@@ -149,13 +149,13 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
                   const req = reqMap.get(`${c.teamId}:${k.id}`);
                   const below = req !== undefined && (r === undefined || r.level < req.requiredLevel);
                   const text = r === undefined ? '—' : `${r.level}${r.validated ? ' ✓' : ' ?'}`;
-                  const desc = r === undefined ? 'sem avaliação' : `nível ${r.level}, ${r.validated ? 'validada' : 'autoavaliação'}`;
+                  const desc = r === undefined ? 'not assessed' : `level ${r.level}, ${r.validated ? 'validated' : 'self-assessment'}`;
                   return (
                     <td key={k.id} className="num">
                       <button
                         type="button"
                         className="link"
-                        aria-label={`${c.code}, ${k.name}: ${desc}${below ? ', abaixo do exigido' : ''}. Editar`}
+                        aria-label={`${c.code}, ${k.name}: ${desc}${below ? ', below the required level' : ''}. Edit`}
                         onClick={() => pick(c, k)}
                       >
                         {text}
@@ -171,31 +171,31 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
       </div>
 
       <form onSubmit={submit} noValidate className="card form-grid">
-        <h3>{existing ? 'Editar avaliação' : 'Nova avaliação'}</h3>
+        <h3>{existing ? 'Edit assessment' : 'New assessment'}</h3>
         {formError && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">{formError}</p>
         )}
-        <Field label="Consultor" error={errors.consultantId}>
+        <Field label="Consultant" error={errors.consultantId}>
           {(c) => (
             <select {...c} name="consultant" value={form.consultantId} onChange={(e) => set('consultantId', e.target.value)}>
-              <option value="">Escolher…</option>
+              <option value="">Choose…</option>
               {consultants.map((p) => (
                 <option key={p.id} value={p.id}>{p.code}</option>
               ))}
             </select>
           )}
         </Field>
-        <Field label="Competência" error={errors.skillId}>
+        <Field label="Skill" error={errors.skillId}>
           {(c) => (
             <select {...c} name="skill" value={form.skillId} onChange={(e) => set('skillId', e.target.value)}>
-              <option value="">Escolher…</option>
+              <option value="">Choose…</option>
               {skills.map((k) => (
                 <option key={k.id} value={k.id}>{k.name}</option>
               ))}
             </select>
           )}
         </Field>
-        <Field label="Nível">
+        <Field label="Level">
           {(c) => (
             <select {...c} ref={levelRef} name="level" value={form.level} onChange={(e) => set('level', e.target.value)}>
               {SKILL_LEVEL_LABEL.map((label, i) => (
@@ -204,32 +204,32 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
             </select>
           )}
         </Field>
-        <Field label="Data da avaliação" error={errors.assessedAt}>
+        <Field label="Assessment date" error={errors.assessedAt}>
           {(c) => <input {...c} name="assessedAt" type="date" max={todayIso()} value={form.assessedAt} onChange={(e) => set('assessedAt', e.target.value)} />}
         </Field>
-        <Field label="Evidência" hint="Projeto, certificação ou entrega que sustenta o nível. Obrigatória se validada." error={errors.evidence}>
+        <Field label="Evidence" hint="Project, certification or delivery that supports the level. Required when validated." error={errors.evidence}>
           {(c) => <input {...c} name="evidence" type="text" autoComplete="off" maxLength={200} value={form.evidence} onChange={(e) => set('evidence', e.target.value)} />}
         </Field>
         <div className="field">
           <label>
             <input type="checkbox" name="validated" checked={form.validated} onChange={(e) => set('validated', e.target.checked)} />{' '}
-            Validada por mim (não é autoavaliação)
+            Validated by me (not a self-assessment)
           </label>
         </div>
         <div className="actions">
           <button type="submit" className="primary" disabled={saving}>
-            {saving ? 'A guardar…' : 'Guardar avaliação'}
+            {saving ? 'Saving…' : 'Save assessment'}
           </button>
           {existing && (
             <ConfirmDelete
-              label="esta avaliação"
+              label="this assessment"
               onConfirm={async () => {
                 try {
                   await api.deleteRating(Number(form.consultantId), Number(form.skillId));
                   await onChanged();
                   setForm(blank());
                 } catch (err) {
-                  fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                  fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                 }
               }}
             />

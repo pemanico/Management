@@ -20,14 +20,14 @@ type Form = {
 type Errors = Partial<Record<keyof Form, string>>;
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
-  planned: 'Planeado',
-  active: 'Ativo',
-  at_risk: 'Em risco',
-  on_hold: 'Em pausa',
-  done: 'Concluído',
+  planned: 'Planned',
+  active: 'Active',
+  at_risk: 'At risk',
+  on_hold: 'On hold',
+  done: 'Done',
 };
 
-export const PRIORITY_LABEL: Record<Priority, string> = { low: 'Baixa', medium: 'Média', high: 'Alta' };
+export const PRIORITY_LABEL: Record<Priority, string> = { low: 'Low', medium: 'Medium', high: 'High' };
 
 const EMPTY: Form = {
   name: '',
@@ -73,16 +73,16 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
     e.preventDefault();
     const next: Errors = {};
     const budgetCents = parseOptionalEuroToCents(form.budget);
-    if (form.name.trim() === '') next.name = 'Indica o nome do projeto.';
-    if (form.teamId === '') next.teamId = 'Escolhe uma equipa.';
+    if (form.name.trim() === '') next.name = 'Enter the project name.';
+    if (form.teamId === '') next.teamId = 'Choose a team.';
     const planned = Number(form.plannedHeadcount);
-    if (!Number.isInteger(planned) || planned < 0) next.plannedHeadcount = 'Indica um número inteiro ≥ 0.';
-    if (budgetCents === null) next.budget = 'Formato inválido. Exemplo: 25.000,00';
+    if (!Number.isInteger(planned) || planned < 0) next.plannedHeadcount = 'Enter a whole number ≥ 0.';
+    if (budgetCents === null) next.budget = 'Invalid format. Example: 25.000,00';
     if (form.startDate !== '' && form.endDate !== '' && form.endDate < form.startDate)
-      next.endDate = 'O fim não pode ser anterior ao início.';
+      next.endDate = 'The end date cannot be before the start date.';
     setErrors(next);
     setFormError(undefined);
-    if (Object.keys(next).length > 0 || budgetCents === null) return fail('Corrige os campos assinalados.');
+    if (Object.keys(next).length > 0 || budgetCents === null) return fail('Fix the highlighted fields.');
 
     setSaving(true);
     try {
@@ -102,7 +102,7 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
       await onChanged();
       reset();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -126,29 +126,29 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
 
   return (
     <section aria-labelledby="proj-title">
-      <h2 id="proj-title">Projetos</h2>
+      <h2 id="proj-title">Projects</h2>
       {teams.length === 0 ? (
-        <p className="empty">Cria primeiro uma equipa no separador Equipas.</p>
+        <p className="empty">Create a team on the Teams page first.</p>
       ) : (
         <form onSubmit={submit} noValidate className="card form-grid">
-          <h3>{editingId === undefined ? 'Novo projeto' : 'Editar projeto'}</h3>
+          <h3>{editingId === undefined ? 'New project' : 'Edit project'}</h3>
           {formError && (
             <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">{formError}</p>
           )}
-          <Field label="Nome" error={errors.name}>
+          <Field label="Name" error={errors.name}>
             {(c) => <input {...c} name="name" type="text" autoComplete="off" value={form.name} onChange={set('name')} />}
           </Field>
-          <Field label="Equipa" error={errors.teamId}>
+          <Field label="Team" error={errors.teamId}>
             {(c) => (
               <select {...c} name="team" value={form.teamId} onChange={set('teamId')}>
-                <option value="">Escolher…</option>
+                <option value="">Choose…</option>
                 {teams.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
             )}
           </Field>
-          <Field label="Estado">
+          <Field label="Status">
             {(c) => (
               <select {...c} name="status" value={form.status} onChange={set('status')}>
                 {PROJECT_STATUSES.map((s) => (
@@ -157,7 +157,7 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
               </select>
             )}
           </Field>
-          <Field label="Prioridade">
+          <Field label="Priority">
             {(c) => (
               <select {...c} name="priority" value={form.priority} onChange={set('priority')}>
                 {PRIORITIES.map((s) => (
@@ -166,44 +166,44 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
               </select>
             )}
           </Field>
-          <Field label="HC de que o projeto precisa" hint="Nº de pessoas a tempo inteiro. 0 = não definido" error={errors.plannedHeadcount}>
+          <Field label="HC the project needs" hint="Number of full-time people. 0 = not set" error={errors.plannedHeadcount}>
             {(c) => <input {...c} name="plannedHeadcount" type="number" inputMode="numeric" min={0} step={1} value={form.plannedHeadcount} onChange={set('plannedHeadcount')} />}
           </Field>
-          <Field label="Budget do projeto (EUR)" hint="Opcional" error={errors.budget}>
+          <Field label="Project budget (EUR)" hint="Optional" error={errors.budget}>
             {(c) => <input {...c} name="budget" type="text" inputMode="decimal" autoComplete="off" value={form.budget} onChange={set('budget')} />}
           </Field>
-          <Field label="Início" hint="Opcional">
+          <Field label="Start" hint="Optional">
             {(c) => <input {...c} name="startDate" type="date" value={form.startDate} onChange={set('startDate')} />}
           </Field>
-          <Field label="Fim previsto" hint="Opcional" error={errors.endDate}>
+          <Field label="Planned end" hint="Optional" error={errors.endDate}>
             {(c) => <input {...c} name="endDate" type="date" value={form.endDate} onChange={set('endDate')} />}
           </Field>
           <div className="actions">
             <button type="submit" className="primary" disabled={saving}>
-              {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar projeto' : 'Guardar alterações'}
+              {saving ? 'Saving…' : editingId === undefined ? 'Add project' : 'Save changes'}
             </button>
-            {editingId !== undefined && <button type="button" onClick={reset}>Cancelar edição</button>}
+            {editingId !== undefined && <button type="button" onClick={reset}>Cancel editing</button>}
           </div>
         </form>
       )}
 
       {projects.length === 0 ? (
-        teams.length > 0 && <p className="empty">Ainda não há projetos registados.</p>
+        teams.length > 0 && <p className="empty">No projects yet.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Projetos da unidade</caption>
+            <caption className="sr-only">Projects in the unit</caption>
             <thead>
               <tr>
-                <th scope="col">Projeto</th>
-                <th scope="col">Equipa</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Prioridade</th>
-                <th scope="col">Fim previsto</th>
-                <th scope="col" className="num">HC necessário</th>
-                <th scope="col" className="num">Alocados</th>
+                <th scope="col">Project</th>
+                <th scope="col">Team</th>
+                <th scope="col">Status</th>
+                <th scope="col">Priority</th>
+                <th scope="col">Planned end</th>
+                <th scope="col" className="num">HC needed</th>
+                <th scope="col" className="num">Allocated</th>
                 <th scope="col" className="num">Budget (EUR)</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -219,23 +219,23 @@ export function ProjectsView({ teams, projects, allocations, onChanged }: Props)
                   <td>{p.endDate ?? '—'}</td>
                   <td className="num">{p.plannedHeadcount === 0 ? '—' : p.plannedHeadcount}</td>
                   <td className="num">
-                    <a href={`#/alocacoes?projeto=${p.id}`}>
+                    <a href={`#/allocations?project=${p.id}`}>
                       {allocated.get(p.id)?.people ?? 0} · {((allocated.get(p.id)?.pct ?? 0) / 100).toFixed(1).replace('.', ',')} FTE
                     </a>
                   </td>
                   <td className="num">{formatOptionalCents(p.budgetCents)}</td>
                   <td className="row-actions">
-                    <button type="button" className="link" onClick={() => edit(p)} aria-label={`Editar ${p.name}`}>
-                      Editar
+                    <button type="button" className="link" onClick={() => edit(p)} aria-label={`Edit ${p.name}`}>
+                      Edit
                     </button>
                     <ConfirmDelete
-                      label={`${p.name} e as suas ${allocated.get(p.id)?.people ?? 0} alocação(ões)`}
+                      label={`${p.name} and its ${allocated.get(p.id)?.people ?? 0} allocation(s)`}
                       onConfirm={async () => {
                         try {
                           await api.deleteProject(p.id);
                           await onChanged();
                         } catch (err) {
-                          fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                          fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                         }
                       }}
                     />

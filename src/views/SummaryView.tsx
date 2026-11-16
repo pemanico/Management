@@ -4,27 +4,27 @@ import { PRIORITY_LABEL, PROJECT_STATUS_LABEL } from './ProjectsView.tsx';
 
 const ALERT_LABEL: Record<Summary['alerts'][number]['type'], string> = {
   budget_over_90: 'Budget',
-  vacancies: 'Vagas',
+  vacancies: 'Open positions',
   over_headcount: 'Headcount',
-  contract_expiring: 'Contrato',
-  missing_cost_rate: 'Externo sem rate',
-  missing_supplier: 'Externo sem fornecedor',
-  stale_data: 'Dados antigos',
-  project_at_risk: 'Projeto em risco',
-  project_overdue: 'Projeto em atraso',
-  projects_exceed_budget: 'Budget de projetos',
-  project_understaffed: 'Projeto sub-staffed',
-  consultant_overallocated: 'Sobre-alocação',
-  consultant_unallocated: 'Sem alocação',
-  skill_gap: 'Gap de competência',
-  skill_unvalidated: 'Competência não validada',
-  skill_assessment_old: 'Avaliações antigas',
-  training_overdue: 'Formação em atraso',
-  training_gap_uncovered: 'Gap sem plano de formação',
-  objective_at_risk: 'Objetivos em risco',
-  objective_overdue: 'Objetivos em atraso',
-  consultant_without_objectives: 'Sem objetivos',
-  evaluation_pending: 'Avaliações em falta',
+  contract_expiring: 'Contract',
+  missing_cost_rate: 'External without rate',
+  missing_supplier: 'External without supplier',
+  stale_data: 'Stale data',
+  project_at_risk: 'Project at risk',
+  project_overdue: 'Project overdue',
+  projects_exceed_budget: 'Project budget',
+  project_understaffed: 'Project under-staffed',
+  consultant_overallocated: 'Over-allocation',
+  consultant_unallocated: 'Unallocated',
+  skill_gap: 'Skill gap',
+  skill_unvalidated: 'Skill not validated',
+  skill_assessment_old: 'Old assessments',
+  training_overdue: 'Training overdue',
+  training_gap_uncovered: 'Gap with no training plan',
+  objective_at_risk: 'Objectives at risk',
+  objective_overdue: 'Objectives overdue',
+  consultant_without_objectives: 'No objectives',
+  evaluation_pending: 'Missing evaluations',
 };
 
 export function SummaryView({ summary }: { summary: Summary }) {
@@ -32,28 +32,28 @@ export function SummaryView({ summary }: { summary: Summary }) {
   const hasMoney = totals.budgetCents > 0; // budget em euros é opcional (muitas unidades só têm budget em headcount)
   return (
     <section aria-labelledby="sum-title">
-      <h2 id="sum-title">Resumo da unidade</h2>
-      <p className="muted-text">Atualizado a {summary.generatedAt.slice(0, 16).replace('T', ' ')} UTC</p>
+      <h2 id="sum-title">Unit overview</h2>
+      <p className="muted-text">Updated on {summary.generatedAt.slice(0, 16).replace('T', ' ')} UTC</p>
 
       <dl className="kpis">
-        {hasMoney && <div className="card"><dt>Budget total</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
-        {hasMoney && <div className="card"><dt>Gasto real</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
-        <div className="card"><dt>Headcount ativo / orçamentado</dt><dd>{totals.activeHeadcount} / {formatHc(totals.plannedHeadcount)}</dd></div>
-        <div className="card"><dt>Internos ativos / orçamentados</dt><dd>{totals.internalHeadcount} / {formatHc(totals.plannedInternalHeadcount)}</dd></div>
-        <div className="card"><dt>Externos ativos / orçamentados</dt><dd>{totals.externalHeadcount} / {formatHc(totals.plannedExternalHeadcount)}</dd></div>
-        <div className="card"><dt>Pessoas repartidas por equipas</dt><dd>{totals.sharedPeople}</dd></div>
-        <div className="card"><dt>Custo de externos / mês</dt><dd>{formatCents(totals.externalMonthlyCostCents)}</dd></div>
-        <div className="card"><dt>Custo de externos / ano</dt><dd>{formatCents(totals.externalAnnualCostCents)}</dd></div>
-        <div className="card"><dt>Formações em aberto</dt><dd>{training.openCount}</dd></div>
-        <div className="card"><dt>Objetivos {objectives.year} atingidos / total</dt><dd>{objectives.achieved} / {objectives.total}</dd></div>
-        <div className="card"><dt>Avaliações {evaluations.year} finais / em falta</dt><dd>{evaluations.finalCount} / {evaluations.missingCount}</dd></div>
-        <div className="card"><dt>Projetos em aberto</dt><dd>{totals.openProjects}</dd></div>
-        <div className="card"><dt>Alertas</dt><dd>{alerts.length}</dd></div>
+        {hasMoney && <div className="card"><dt>Total budget</dt><dd>{formatCents(totals.budgetCents)}</dd></div>}
+        {hasMoney && <div className="card"><dt>Actual spend</dt><dd>{formatCents(totals.actualCents)}</dd></div>}
+        <div className="card"><dt>Headcount active / budgeted</dt><dd>{totals.activeHeadcount} / {formatHc(totals.plannedHeadcount)}</dd></div>
+        <div className="card"><dt>Internal active / budgeted</dt><dd>{totals.internalHeadcount} / {formatHc(totals.plannedInternalHeadcount)}</dd></div>
+        <div className="card"><dt>External active / budgeted</dt><dd>{totals.externalHeadcount} / {formatHc(totals.plannedExternalHeadcount)}</dd></div>
+        <div className="card"><dt>People split across teams</dt><dd>{totals.sharedPeople}</dd></div>
+        <div className="card"><dt>External cost / month</dt><dd>{formatCents(totals.externalMonthlyCostCents)}</dd></div>
+        <div className="card"><dt>External cost / year</dt><dd>{formatCents(totals.externalAnnualCostCents)}</dd></div>
+        <div className="card"><dt>Open training</dt><dd>{training.openCount}</dd></div>
+        <div className="card"><dt>Objectives {objectives.year} achieved / total</dt><dd>{objectives.achieved} / {objectives.total}</dd></div>
+        <div className="card"><dt>Evaluations {evaluations.year} final / missing</dt><dd>{evaluations.finalCount} / {evaluations.missingCount}</dd></div>
+        <div className="card"><dt>Open projects</dt><dd>{totals.openProjects}</dd></div>
+        <div className="card"><dt>Alerts</dt><dd>{alerts.length}</dd></div>
       </dl>
 
-      <h3>Alertas</h3>
+      <h3>Alerts</h3>
       {alerts.length === 0 ? (
-        <p className="empty">Sem alertas. Bom sinal, ou faltam dados.</p>
+        <p className="empty">No alerts. A good sign, or data is missing.</p>
       ) : (
         <ul className="alerts">
           {alerts.map((a) => (
@@ -64,24 +64,24 @@ export function SummaryView({ summary }: { summary: Summary }) {
         </ul>
       )}
 
-      <h3>Fornecedores de externos</h3>
-      <p className="muted-text">Custos = rate diária × 20 dias × 11 meses, a 100 % (não considera a % de alocação).</p>
+      <h3>External suppliers</h3>
+      <p className="muted-text">Costs = daily rate × 20 days × 11 months, at 100 % (allocation % is not considered).</p>
       {suppliers.length === 0 ? (
-        <p className="empty">Sem externos ativos com fornecedor registado.</p>
+        <p className="empty">No active externals with a supplier.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Externos ativos por fornecedor</caption>
+            <caption className="sr-only">Active externals by supplier</caption>
             <thead>
               <tr>
-                <th scope="col">Fornecedor</th>
-                <th scope="col" className="num">Externos ativos</th>
-                <th scope="col" className="num">% dos externos</th>
-                <th scope="col" className="num">Rate média/dia</th>
-                <th scope="col" className="num">Custo/mês</th>
-                <th scope="col" className="num">Custo/ano</th>
-                <th scope="col" className="num">Contratos a expirar (90d)</th>
-                <th scope="col">Equipas</th>
+                <th scope="col">Supplier</th>
+                <th scope="col" className="num">Active externals</th>
+                <th scope="col" className="num">% of externals</th>
+                <th scope="col" className="num">Average rate/day</th>
+                <th scope="col" className="num">Cost/month</th>
+                <th scope="col" className="num">Cost/year</th>
+                <th scope="col" className="num">Contracts expiring (90d)</th>
+                <th scope="col">Teams</th>
               </tr>
             </thead>
             <tbody>
@@ -105,29 +105,29 @@ export function SummaryView({ summary }: { summary: Summary }) {
         </div>
       )}
 
-      <h3>Por equipa</h3>
-      <p className="muted-text">Headcount e custo contam por fração: uma pessoa repartida 50/50 vale 0,5 em cada equipa. Skills, objetivos e alocação contam só na equipa principal.</p>
+      <h3>By team</h3>
+      <p className="muted-text">Headcount and cost count by fraction: a person split 50/50 is 0,5 in each team. Skills, objectives and allocation count only in the main team.</p>
       {teams.length === 0 ? (
-        <p className="empty">Ainda não há equipas. Começa no separador Equipas.</p>
+        <p className="empty">No teams yet. Start on the Teams page.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Indicadores por equipa</caption>
+            <caption className="sr-only">Indicators by team</caption>
             <thead>
               <tr>
-                <th scope="col">Equipa</th>
-                <th scope="col" className="num">Ativos / orçamentados</th>
+                <th scope="col">Team</th>
+                <th scope="col" className="num">Active / budgeted</th>
                 {hasMoney && <th scope="col" className="num">Budget</th>}
-                {hasMoney && <th scope="col" className="num">Gasto</th>}
-                {hasMoney && <th scope="col" className="num">% consumido</th>}
-                <th scope="col" className="num">Internos (ativos / orç.)</th>
-                <th scope="col" className="num">Externos (ativos / orç.)</th>
-                <th scope="col" className="num">Rate média (externos)</th>
-                <th scope="col" className="num">Custo externos/ano</th>
-                <th scope="col" className="num">Contratos a expirar (90d)</th>
-                <th scope="col" className="num">Projetos abertos</th>
-                <th scope="col" className="num">Sem alocação</th>
-                <th scope="col" className="num">Sobre-alocados</th>
+                {hasMoney && <th scope="col" className="num">Spend</th>}
+                {hasMoney && <th scope="col" className="num">% used</th>}
+                <th scope="col" className="num">Internal (active / budg.)</th>
+                <th scope="col" className="num">External (active / budg.)</th>
+                <th scope="col" className="num">Average rate (externals)</th>
+                <th scope="col" className="num">External cost/year</th>
+                <th scope="col" className="num">Contracts expiring (90d)</th>
+                <th scope="col" className="num">Open projects</th>
+                <th scope="col" className="num">Unallocated</th>
+                <th scope="col" className="num">Over-allocated</th>
               </tr>
             </thead>
             <tbody>
@@ -137,9 +137,9 @@ export function SummaryView({ summary }: { summary: Summary }) {
                   <td className="num">
                     {formatHc(t.activeHeadcount)} / {formatHc(t.plannedHeadcount)}
                     {t.headcountGap !== 0 && (
-                      <span className="flag"> {t.headcountGap > 0 ? `${formatHc(t.headcountGap)} vaga(s)` : `+${formatHc(-t.headcountGap)} acima`}</span>
+                      <span className="flag"> {t.headcountGap > 0 ? `${formatHc(t.headcountGap)} open` : `+${formatHc(-t.headcountGap)} over`}</span>
                     )}
-                    {t.sharedIn > 0 && <span className="muted-text"> ({t.sharedIn} partilhada(s))</span>}
+                    {t.sharedIn > 0 && <span className="muted-text"> ({t.sharedIn} shared)</span>}
                   </td>
                   {hasMoney && <td className="num">{formatCents(t.budgetCents)}</td>}
                   {hasMoney && <td className="num">{formatCents(t.actualCents)}</td>}
@@ -169,23 +169,23 @@ export function SummaryView({ summary }: { summary: Summary }) {
           </table>
         </div>
       )}
-      <h3>Projetos</h3>
+      <h3>Projects</h3>
       {projects.length === 0 ? (
-        <p className="empty">Ainda não há projetos.</p>
+        <p className="empty">No projects yet.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Projetos e progresso</caption>
+            <caption className="sr-only">Projects and progress</caption>
             <thead>
               <tr>
-                <th scope="col">Projeto</th>
-                <th scope="col">Equipa</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Prioridade</th>
-                <th scope="col">Fim previsto</th>
-                <th scope="col" className="num">HC necessário</th>
-                <th scope="col" className="num">Alocados</th>
-                <th scope="col" className="num">Défice</th>
+                <th scope="col">Project</th>
+                <th scope="col">Team</th>
+                <th scope="col">Status</th>
+                <th scope="col">Priority</th>
+                <th scope="col">Planned end</th>
+                <th scope="col" className="num">HC needed</th>
+                <th scope="col" className="num">Allocated</th>
+                <th scope="col" className="num">Shortfall</th>
               </tr>
             </thead>
             <tbody>
@@ -209,28 +209,28 @@ export function SummaryView({ summary }: { summary: Summary }) {
         </div>
       )}
 
-      <h3>Cobertura de competências</h3>
+      <h3>Skill coverage</h3>
       {skills.coverage.length === 0 ? (
-        <p className="empty">Sem requisitos definidos. Define-os em Competências.</p>
+        <p className="empty">No requirements set. Set them on the Skills page.</p>
       ) : (
         <>
           <p className="muted-text">
-            {skills.skillCount} competência(s), {skills.ratingCount} avaliação(ões), {formatBp(skills.validatedRatioBp)} validadas.
+            {skills.skillCount} skill(s), {skills.ratingCount} assessment(s), {formatBp(skills.validatedRatioBp)} validated.
           </p>
           <div className="table-wrap">
             <table>
-              <caption className="sr-only">Cobertura de competências por equipa</caption>
+              <caption className="sr-only">Skill coverage by team</caption>
               <thead>
                 <tr>
-                  <th scope="col">Equipa</th>
-                  <th scope="col">Competência</th>
-                  <th scope="col" className="num">Nível exigido</th>
-                  <th scope="col" className="num">Mínimo</th>
-                  <th scope="col" className="num">Qualificados</th>
-                  <th scope="col" className="num">Validados</th>
-                  <th scope="col" className="num">Défice</th>
-                  <th scope="col" className="num">Em formação</th>
-                  <th scope="col" className="num">Défice após formação</th>
+                  <th scope="col">Team</th>
+                  <th scope="col">Skill</th>
+                  <th scope="col" className="num">Required level</th>
+                  <th scope="col" className="num">Minimum</th>
+                  <th scope="col" className="num">Qualified</th>
+                  <th scope="col" className="num">Validated</th>
+                  <th scope="col" className="num">Shortfall</th>
+                  <th scope="col" className="num">In training</th>
+                  <th scope="col" className="num">Shortfall after training</th>
                 </tr>
               </thead>
               <tbody>
@@ -249,7 +249,7 @@ export function SummaryView({ summary }: { summary: Summary }) {
                     <td className="num">{c.inTraining}</td>
                     <td className="num">
                       {c.gapAfterTraining}
-                      {c.gapAfterTraining > 0 && <span className="flag"> ▲ sem plano</span>}
+                      {c.gapAfterTraining > 0 && <span className="flag"> ▲ no plan</span>}
                     </td>
                   </tr>
                 ))}
@@ -259,20 +259,20 @@ export function SummaryView({ summary }: { summary: Summary }) {
         </>
       )}
 
-      <h3>Alocação por consultor</h3>
+      <h3>Allocation by consultant</h3>
       {allocations.length === 0 ? (
-        <p className="empty">Sem consultores ativos.</p>
+        <p className="empty">No active consultants.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Total alocado por consultor</caption>
+            <caption className="sr-only">Total allocated per consultant</caption>
             <thead>
               <tr>
-                <th scope="col">Consultor</th>
-                <th scope="col">Equipa</th>
-                <th scope="col" className="num">Projetos</th>
-                <th scope="col" className="num">Total alocado</th>
-                <th scope="col">Situação</th>
+                <th scope="col">Consultant</th>
+                <th scope="col">Team</th>
+                <th scope="col" className="num">Projects</th>
+                <th scope="col" className="num">Total allocated</th>
+                <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -283,8 +283,8 @@ export function SummaryView({ summary }: { summary: Summary }) {
                   <td className="num">{a.projectCount}</td>
                   <td className="num">{a.allocatedPct}&nbsp;%</td>
                   <td>
-                    {a.allocatedPct === 0 && <span className="flag">▲ sem alocação</span>}
-                    {a.allocatedPct > 100 && <span className="flag">▲ sobre-alocado</span>}
+                    {a.allocatedPct === 0 && <span className="flag">▲ unallocated</span>}
+                    {a.allocatedPct > 100 && <span className="flag">▲ over-allocated</span>}
                     {a.allocatedPct > 0 && a.allocatedPct <= 100 && 'OK'}
                   </td>
                 </tr>

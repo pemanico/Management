@@ -24,11 +24,11 @@ type Props = {
 };
 
 export const OBJECTIVE_STATUS_LABEL: Record<ObjectiveStatus, string> = {
-  not_started: 'Por iniciar',
-  on_track: 'No bom caminho',
-  at_risk: 'Em risco',
-  achieved: 'Atingido',
-  missed: 'Não atingido',
+  not_started: 'Not started',
+  on_track: 'On track',
+  at_risk: 'At risk',
+  achieved: 'Achieved',
+  missed: 'Missed',
 };
 
 type Form = { scope: string; title: string; period: string; status: ObjectiveStatus; progress: string; dueDate: string };
@@ -66,14 +66,14 @@ export function ObjectivesView({ teams, consultants, objectives, periodFilter, o
     e.preventDefault();
     const next: Errors = {};
     const progress = Number(form.progress);
-    if (form.scope === '') next.scope = 'Escolhe a equipa ou o consultor.';
-    if (form.title.trim() === '' || form.title.trim().length > 140) next.title = 'Título obrigatório (máx. 140 caracteres).';
-    if (!PERIOD_RE.test(form.period)) next.period = 'Usa 2026, 2026-H1 ou 2026-H2.';
-    if (!Number.isInteger(progress) || progress < 0 || progress > 100) next.progress = 'Entre 0 e 100.';
-    else if (form.status === 'achieved' && progress !== 100) next.progress = 'Um objetivo atingido tem 100 %.';
+    if (form.scope === '') next.scope = 'Choose the team or the consultant.';
+    if (form.title.trim() === '' || form.title.trim().length > 140) next.title = 'Title is required (max. 140 characters).';
+    if (!PERIOD_RE.test(form.period)) next.period = 'Use 2026, 2026-H1 or 2026-H2.';
+    if (!Number.isInteger(progress) || progress < 0 || progress > 100) next.progress = 'From 0 to 100.';
+    else if (form.status === 'achieved' && progress !== 100) next.progress = 'An achieved objective is at 100 %.';
     setErrors(next);
     setFormError(undefined);
-    if (Object.keys(next).length > 0) return fail('Corrige os campos assinalados.');
+    if (Object.keys(next).length > 0) return fail('Fix the highlighted fields.');
 
     const [kind, id] = form.scope.split(':');
     setSaving(true);
@@ -93,7 +93,7 @@ export function ObjectivesView({ teams, consultants, objectives, periodFilter, o
       await onChanged();
       reset();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -116,30 +116,30 @@ export function ObjectivesView({ teams, consultants, objectives, periodFilter, o
   if (teams.length === 0)
     return (
       <section aria-labelledby="ob-title">
-        <h2 id="ob-title">Objetivos</h2>
-        <p className="empty">Cria primeiro uma equipa (separador Equipas).</p>
+        <h2 id="ob-title">Objectives</h2>
+        <p className="empty">Create a team first (Teams page).</p>
       </section>
     );
 
   return (
     <section aria-labelledby="ob-title">
-      <h2 id="ob-title">Objetivos</h2>
+      <h2 id="ob-title">Objectives</h2>
       <p className="banner">
-        Os objetivos ficam só na base de dados local. O que vai para o Claude são apenas agregados por equipa
-        (contagens e progresso médio), nunca o texto nem o consultor.
+        Objectives stay in the local database only. Claude only receives aggregates by team
+        (counts and average progress), never the text or the consultant.
       </p>
 
       <form onSubmit={submit} noValidate className="card form-grid">
-        <h3>{editingId === undefined ? 'Novo objetivo' : 'Editar objetivo'}</h3>
+        <h3>{editingId === undefined ? 'New objective' : 'Edit objective'}</h3>
         {formError && <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">{formError}</p>}
-        <Field label="Âmbito" error={errors.scope}>
+        <Field label="Scope" error={errors.scope}>
           {(c) => (
             <select {...c} name="scope" value={form.scope} onChange={(e) => set('scope', e.target.value)}>
-              <option value="">Escolher…</option>
-              <optgroup label="Equipa">
+              <option value="">Choose…</option>
+              <optgroup label="Team">
                 {teams.map((t) => <option key={`t${t.id}`} value={`t:${t.id}`}>{t.name}</option>)}
               </optgroup>
-              <optgroup label="Consultor">
+              <optgroup label="Consultant">
                 {consultants.filter((p) => p.status === 'active').map((p) => (
                   <option key={`c${p.id}`} value={`c:${p.id}`}>{p.code} ({teamLabel(p, teamName)})</option>
                 ))}
@@ -147,62 +147,62 @@ export function ObjectivesView({ teams, consultants, objectives, periodFilter, o
             </select>
           )}
         </Field>
-        <Field label="Objetivo" error={errors.title}>
+        <Field label="Objective" error={errors.title}>
           {(c) => <input {...c} name="title" type="text" autoComplete="off" value={form.title} onChange={(e) => set('title', e.target.value)} />}
         </Field>
-        <Field label="Período" hint="2026, 2026-H1 ou 2026-H2" error={errors.period}>
+        <Field label="Period" hint="2026, 2026-H1 or 2026-H2" error={errors.period}>
           {(c) => <input {...c} name="period" type="text" autoComplete="off" value={form.period} onChange={(e) => set('period', e.target.value)} />}
         </Field>
-        <Field label="Estado">
+        <Field label="Status">
           {(c) => (
             <select {...c} name="status" value={form.status} onChange={(e) => set('status', e.target.value as ObjectiveStatus)}>
               {OBJECTIVE_STATUSES.map((s) => <option key={s} value={s}>{OBJECTIVE_STATUS_LABEL[s]}</option>)}
             </select>
           )}
         </Field>
-        <Field label="Progresso (%)" error={errors.progress}>
+        <Field label="Progress (%)" error={errors.progress}>
           {(c) => <input {...c} name="progress" type="text" inputMode="numeric" autoComplete="off" value={form.progress} onChange={(e) => set('progress', e.target.value)} />}
         </Field>
-        <Field label="Data limite" hint="Opcional">
+        <Field label="Due date" hint="Optional">
           {(c) => <input {...c} name="dueDate" type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} />}
         </Field>
         <div className="actions">
           <button type="submit" className="primary" disabled={saving}>
-            {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar objetivo' : 'Guardar alterações'}
+            {saving ? 'Saving…' : editingId === undefined ? 'Add objective' : 'Save changes'}
           </button>
-          {editingId !== undefined && <button type="button" onClick={reset}>Cancelar edição</button>}
+          {editingId !== undefined && <button type="button" onClick={reset}>Cancel editing</button>}
         </div>
       </form>
 
       <div className="field">
-        <label htmlFor="ob-period">Período</label>
+        <label htmlFor="ob-period">Period</label>
         <select id="ob-period" value={periodFilter} onChange={(e) => onFilter(e.target.value)}>
-          <option value="">Todos</option>
+          <option value="">All</option>
           {periods.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
 
       {shown.length === 0 ? (
-        <p className="empty">Sem objetivos para este filtro.</p>
+        <p className="empty">No objectives for this filter.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Objetivos</caption>
+            <caption className="sr-only">Objectives</caption>
             <thead>
               <tr>
-                <th scope="col">Âmbito</th>
-                <th scope="col">Objetivo</th>
-                <th scope="col">Período</th>
-                <th scope="col">Estado</th>
-                <th scope="col" className="num">Progresso</th>
-                <th scope="col">Data limite</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Scope</th>
+                <th scope="col">Objective</th>
+                <th scope="col">Period</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="num">Progress</th>
+                <th scope="col">Due date</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {shown.map((o) => {
                 const overdue = o.dueDate !== null && o.dueDate < today && o.status !== 'achieved' && o.status !== 'missed';
-                const scope = o.teamId !== null ? `Equipa ${teamName.get(o.teamId) ?? '—'}` : (personById.get(o.consultantId ?? 0)?.code ?? '—');
+                const scope = o.teamId !== null ? `Team ${teamName.get(o.teamId) ?? '—'}` : (personById.get(o.consultantId ?? 0)?.code ?? '—');
                 return (
                   <tr key={o.id} className={o.status === 'achieved' || o.status === 'missed' ? 'muted' : undefined}>
                     <th scope="row">{scope}</th>
@@ -210,9 +210,9 @@ export function ObjectivesView({ teams, consultants, objectives, periodFilter, o
                     <td>{o.period}</td>
                     <td>{OBJECTIVE_STATUS_LABEL[o.status]}{o.status === 'at_risk' && <span className="flag"> ▲</span>}</td>
                     <td className="num">{o.progressPct} %</td>
-                    <td>{o.dueDate ?? '—'}{overdue && <span className="flag"> ▲ em atraso</span>}</td>
+                    <td>{o.dueDate ?? '—'}{overdue && <span className="flag"> ▲ overdue</span>}</td>
                     <td className="row-actions">
-                      <button type="button" className="link" onClick={() => edit(o)} aria-label={`Editar ${o.title}`}>Editar</button>
+                      <button type="button" className="link" onClick={() => edit(o)} aria-label={`Edit ${o.title}`}>Edit</button>
                       <ConfirmDelete
                         label={o.title}
                         onConfirm={async () => {
@@ -220,7 +220,7 @@ export function ObjectivesView({ teams, consultants, objectives, periodFilter, o
                             await api.deleteObjective(o.id);
                             await onChanged();
                           } catch (err) {
-                            fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                            fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                           }
                         }}
                       />

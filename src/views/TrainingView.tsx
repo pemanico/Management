@@ -45,16 +45,16 @@ type Form = {
 type Errors = Partial<Record<keyof Form, string>>;
 
 const KIND_LABEL: Record<TrainingKind, string> = {
-  course: 'Curso',
-  certification: 'Certificação',
-  mentoring: 'Mentoria',
+  course: 'Course',
+  certification: 'Certification',
+  mentoring: 'Mentoring',
   on_the_job: 'On-the-job',
 };
 const STATUS_LABEL: Record<TrainingStatus, string> = {
-  planned: 'Planeada',
-  in_progress: 'Em curso',
-  done: 'Concluída',
-  cancelled: 'Cancelada',
+  planned: 'Planned',
+  in_progress: 'In progress',
+  done: 'Done',
+  cancelled: 'Cancelled',
 };
 const isOpen = (t: Training) => t.status === 'planned' || t.status === 'in_progress';
 
@@ -130,7 +130,7 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
       consultantId: String(consultantId),
       skillId: String(skillId),
       targetLevel: String(level),
-      title: `Formação em ${skillName.get(skillId) ?? ''}`.trim(),
+      title: `Training in ${skillName.get(skillId) ?? ''}`.trim(),
     });
     queueMicrotask(() => titleRef.current?.focus());
   }
@@ -141,15 +141,15 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
     const costCents = parseOptionalEuroToCents(form.cost);
     const target = Number(form.targetLevel);
     const current = form.consultantId && form.skillId ? levelOf(Number(form.consultantId), Number(form.skillId)) : null;
-    if (form.consultantId === '') next.consultantId = 'Escolhe o consultor.';
-    if (form.skillId === '') next.skillId = 'Escolhe a competência.';
-    if (form.title.trim() === '') next.title = 'Indica o título da formação.';
-    if (costCents === null) next.cost = 'Formato inválido. Exemplo: 450,00';
+    if (form.consultantId === '') next.consultantId = 'Choose the consultant.';
+    if (form.skillId === '') next.skillId = 'Choose the skill.';
+    if (form.title.trim() === '') next.title = 'Enter the training title.';
+    if (costCents === null) next.cost = 'Invalid format. Example: 450,00';
     if (current !== null && target <= current)
-      next.targetLevel = `O consultor já está no nível ${current}; o nível alvo tem de ser superior.`;
+      next.targetLevel = `The consultant is already at level ${current}; the target level must be higher.`;
     setErrors(next);
     setFormError(undefined);
-    if (Object.keys(next).length > 0 || costCents === null) return fail('Corrige os campos assinalados.');
+    if (Object.keys(next).length > 0 || costCents === null) return fail('Fix the highlighted fields.');
 
     setSaving(true);
     try {
@@ -169,7 +169,7 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
       await onChanged();
       reset();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -194,30 +194,30 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
   if (consultants.length === 0 || skills.length === 0)
     return (
       <section aria-labelledby="tr-title">
-        <h2 id="tr-title">Formação</h2>
-        <p className="empty">Precisas de consultores (separador Consultores) e de competências (separador Competências).</p>
+        <h2 id="tr-title">Training</h2>
+        <p className="empty">You need consultants (Consultants page) and skills (Skills page) first.</p>
       </section>
     );
 
   return (
     <section aria-labelledby="tr-title">
-      <h2 id="tr-title">Formação</h2>
+      <h2 id="tr-title">Training</h2>
 
-      <h3>Gaps de competência por fechar</h3>
+      <h3>Open skill gaps</h3>
       {gaps.length === 0 ? (
-        <p className="empty">Sem gaps. Define requisitos por equipa em Competências para a app apontar onde falta formação.</p>
+        <p className="empty">No gaps. Set team requirements on the Skills page so the app can show where training is needed.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Gaps de competência e candidatos a formação</caption>
+            <caption className="sr-only">Skill gaps and training candidates</caption>
             <thead>
               <tr>
-                <th scope="col">Equipa</th>
-                <th scope="col">Competência</th>
-                <th scope="col" className="num">Défice</th>
-                <th scope="col" className="num">Em formação</th>
-                <th scope="col" className="num">Défice após formação</th>
-                <th scope="col">Candidatos (sem formação em aberto que chegue ao nível)</th>
+                <th scope="col">Team</th>
+                <th scope="col">Skill</th>
+                <th scope="col" className="num">Shortfall</th>
+                <th scope="col" className="num">In training</th>
+                <th scope="col" className="num">Shortfall after training</th>
+                <th scope="col">Candidates (no open training that reaches the level)</th>
               </tr>
             </thead>
             <tbody>
@@ -229,7 +229,7 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
                   <td className="num">{g.cov.inTraining}</td>
                   <td className="num">
                     {g.cov.gapAfterTraining}
-                    {g.cov.gapAfterTraining > 0 && <span className="flag"> ▲ sem plano</span>}
+                    {g.cov.gapAfterTraining > 0 && <span className="flag"> ▲ no plan</span>}
                   </td>
                   <td>
                     {g.candidates.length === 0 ? (
@@ -243,10 +243,10 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
                               key={c.id}
                               type="button"
                               className="link"
-                              aria-label={`Planear formação de ${c.code} em ${g.skill}, nível atual ${lvl ?? 'sem avaliação'}`}
+                              aria-label={`Plan training for ${c.code} in ${g.skill}, current level ${lvl ?? 'not assessed'}`}
                               onClick={() => plan(c.id, g.rq.skillId, g.rq.requiredLevel)}
                             >
-                              {c.code} ({lvl === null ? 'sem avaliação' : `nível ${lvl}`})
+                              {c.code} ({lvl === null ? 'not assessed' : `level ${lvl}`})
                             </button>
                           );
                         })}
@@ -261,29 +261,29 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
       )}
 
       <form onSubmit={submit} noValidate className="card form-grid">
-        <h3>{editingId === undefined ? 'Nova formação' : 'Editar formação'}</h3>
+        <h3>{editingId === undefined ? 'New training' : 'Edit training'}</h3>
         {formError && <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">{formError}</p>}
-        <Field label="Consultor" error={errors.consultantId}>
+        <Field label="Consultant" error={errors.consultantId}>
           {(c) => (
             <select {...c} name="consultant" value={form.consultantId} onChange={(e) => set('consultantId', e.target.value)}>
-              <option value="">Escolher…</option>
+              <option value="">Choose…</option>
               {active.map((p) => (
                 <option key={p.id} value={p.id}>{p.code} ({teamLabel(p, teamName)})</option>
               ))}
             </select>
           )}
         </Field>
-        <Field label="Competência" error={errors.skillId}>
+        <Field label="Skill" error={errors.skillId}>
           {(c) => (
             <select {...c} name="skill" value={form.skillId} onChange={(e) => set('skillId', e.target.value)}>
-              <option value="">Escolher…</option>
+              <option value="">Choose…</option>
               {skills.map((k) => (
                 <option key={k.id} value={k.id}>{k.name}</option>
               ))}
             </select>
           )}
         </Field>
-        <Field label="Nível alvo" hint="Nível que a formação deve levar o consultor a atingir" error={errors.targetLevel}>
+        <Field label="Target level" hint="Level the training should bring the consultant to" error={errors.targetLevel}>
           {(c) => (
             <select {...c} name="targetLevel" value={form.targetLevel} onChange={(e) => set('targetLevel', e.target.value)}>
               {[1, 2, 3, 4].map((l) => (
@@ -292,7 +292,7 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
             </select>
           )}
         </Field>
-        <Field label="Tipo">
+        <Field label="Type">
           {(c) => (
             <select {...c} name="kind" value={form.kind} onChange={(e) => set('kind', e.target.value as TrainingKind)}>
               {TRAINING_KINDS.map((k) => (
@@ -301,10 +301,10 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
             </select>
           )}
         </Field>
-        <Field label="Título" error={errors.title}>
+        <Field label="Title" error={errors.title}>
           {(c) => <input {...c} ref={titleRef} name="title" type="text" autoComplete="off" value={form.title} onChange={(e) => set('title', e.target.value)} />}
         </Field>
-        <Field label="Estado">
+        <Field label="Status">
           {(c) => (
             <select {...c} name="status" value={form.status} onChange={(e) => set('status', e.target.value as TrainingStatus)}>
               {TRAINING_STATUSES.map((s) => (
@@ -313,37 +313,37 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
             </select>
           )}
         </Field>
-        <Field label="Data limite" hint="Opcional">
+        <Field label="Due date" hint="Optional">
           {(c) => <input {...c} name="dueDate" type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} />}
         </Field>
-        <Field label="Custo (EUR)" hint="Opcional" error={errors.cost}>
+        <Field label="Cost (EUR)" hint="Optional" error={errors.cost}>
           {(c) => <input {...c} name="cost" type="text" inputMode="decimal" autoComplete="off" value={form.cost} onChange={(e) => set('cost', e.target.value)} />}
         </Field>
         <div className="actions">
           <button type="submit" className="primary" disabled={saving}>
-            {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar formação' : 'Guardar alterações'}
+            {saving ? 'Saving…' : editingId === undefined ? 'Add training' : 'Save changes'}
           </button>
-          {editingId !== undefined && <button type="button" onClick={reset}>Cancelar edição</button>}
+          {editingId !== undefined && <button type="button" onClick={reset}>Cancel editing</button>}
         </div>
       </form>
 
       {trainings.length === 0 ? (
-        <p className="empty">Ainda não há formações planeadas.</p>
+        <p className="empty">No training planned yet.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Plano de formação</caption>
+            <caption className="sr-only">Training plan</caption>
             <thead>
               <tr>
-                <th scope="col">Consultor</th>
-                <th scope="col">Competência</th>
-                <th scope="col" className="num">Nível atual → alvo</th>
-                <th scope="col">Tipo</th>
-                <th scope="col">Título</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Data limite</th>
-                <th scope="col" className="num">Custo</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Consultant</th>
+                <th scope="col">Skill</th>
+                <th scope="col" className="num">Current → target level</th>
+                <th scope="col">Type</th>
+                <th scope="col">Title</th>
+                <th scope="col">Status</th>
+                <th scope="col">Due date</th>
+                <th scope="col" className="num">Cost</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -362,17 +362,17 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
                     <td>
                       {STATUS_LABEL[t.status]}
                       {toUpdate && (
-                        <span className="flag"> ▲ <a href="#/matriz">atualiza o nível na skill matrix</a></span>
+                        <span className="flag"> ▲ <a href="#/matrix">updates the level in the skill matrix</a></span>
                       )}
                     </td>
                     <td>
                       {t.dueDate ?? '—'}
-                      {overdue && <span className="flag"> ▲ em atraso</span>}
+                      {overdue && <span className="flag"> ▲ overdue</span>}
                     </td>
                     <td className="num">{formatOptionalCents(t.costCents)}</td>
                     <td className="row-actions">
-                      <button type="button" className="link" onClick={() => edit(t)} aria-label={`Editar ${t.title}`}>
-                        Editar
+                      <button type="button" className="link" onClick={() => edit(t)} aria-label={`Edit ${t.title}`}>
+                        Edit
                       </button>
                       <ConfirmDelete
                         label={t.title}
@@ -381,7 +381,7 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
                             await api.deleteTraining(t.id);
                             await onChanged();
                           } catch (err) {
-                            fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                            fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                           }
                         }}
                       />

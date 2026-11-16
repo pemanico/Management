@@ -37,7 +37,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError('Não foi possível contactar o servidor local. Está a correr (npm run server)?');
+    throw new ApiError('Could not reach the local server. Is it running (npm run server)?');
   }
   const ct = res.headers.get('content-type') ?? '';
   const data: unknown = ct.includes('json') ? await res.json() : await res.text();
@@ -45,7 +45,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
     const msg =
       typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string'
         ? data.error
-        : 'Ocorreu um erro. Tenta novamente.';
+        : 'Something went wrong. Try again.';
     throw new ApiError(msg);
   }
   return data as T;

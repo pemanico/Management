@@ -17,46 +17,46 @@ import { EvaluationsView } from './views/EvaluationsView.tsx';
 import { ProfilesView } from './views/ProfilesView.tsx';
 
 const NAV = [
-  { group: 'Dashboards', items: [{ id: 'resumo', label: 'Resumo' }] },
+  { group: 'Dashboards', items: [{ id: 'overview', label: 'Overview' }] },
   {
-    group: 'Pessoas',
+    group: 'People',
     items: [
-      { id: 'equipas', label: 'Equipas' },
-      { id: 'consultores', label: 'Consultores' },
-      { id: 'perfis', label: 'Perfis' },
+      { id: 'teams', label: 'Teams' },
+      { id: 'consultants', label: 'Consultants' },
+      { id: 'profiles', label: 'Profiles' },
     ],
   },
   {
-    group: 'Trabalho',
+    group: 'Work',
     items: [
-      { id: 'projetos', label: 'Projetos' },
-      { id: 'alocacoes', label: 'Alocações' },
+      { id: 'projects', label: 'Projects' },
+      { id: 'allocations', label: 'Allocations' },
     ],
   },
   {
-    group: 'Competências',
+    group: 'Skills',
     items: [
-      { id: 'competencias', label: 'Competências' },
-      { id: 'matriz', label: 'Skill matrix' },
-      { id: 'formacao', label: 'Formação' },
+      { id: 'skills', label: 'Skills' },
+      { id: 'matrix', label: 'Skill matrix' },
+      { id: 'training', label: 'Training' },
     ],
   },
   {
-    group: 'Desempenho',
+    group: 'Performance',
     items: [
-      { id: 'objetivos', label: 'Objetivos' },
-      { id: 'avaliacoes', label: 'Avaliações' },
+      { id: 'objectives', label: 'Objectives' },
+      { id: 'evaluations', label: 'Evaluations' },
     ],
   },
-  { group: 'Dados', items: [{ id: 'exportar', label: 'Exportar' }] },
+  { group: 'Date', items: [{ id: 'export', label: 'Export' }] },
 ] as const;
 const ROUTES = NAV.flatMap((g) => g.items.map((r) => ({ id: r.id, label: r.label })));
-const THEME_LABEL: Record<Theme, string> = { system: 'Sistema', light: 'Claro', dark: 'Escuro' };
+const THEME_LABEL: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 type RouteId = (typeof NAV)[number]['items'][number]['id'];
 
 function readHash(): { route: RouteId; params: URLSearchParams } {
   const [path = '', query = ''] = window.location.hash.replace('#/', '').split('?');
-  return { route: ROUTES.find((r) => r.id === path)?.id ?? 'resumo', params: new URLSearchParams(query) };
+  return { route: ROUTES.find((r) => r.id === path)?.id ?? 'overview', params: new URLSearchParams(query) };
 }
 
 // As vistas ficam montadas e só se escondem: trocar de rota não perde o estado dos formulários.
@@ -131,7 +131,7 @@ export function App() {
         data: { summary, teams, departments, profiles, consultants, projects, allocations, skills, ratings, requirements, trainings, objectives, evaluations },
       });
     } catch (err) {
-      setState({ status: 'error', message: err instanceof ApiError ? err.message : 'Ocorreu um erro.' });
+      setState({ status: 'error', message: err instanceof ApiError ? err.message : 'Something went wrong.' });
     }
   }, []);
 
@@ -149,7 +149,7 @@ export function App() {
   const saved = useCallback(async () => {
     await load();
     // Objeto novo a cada gravação: reinicia o temporizador e volta a anunciar mesmo com o mesmo texto.
-    setNotice((prev) => ({ id: (prev?.id ?? 0) + 1, text: 'Alterações guardadas.' }));
+    setNotice((prev) => ({ id: (prev?.id ?? 0) + 1, text: 'Changes saved.' }));
   }, [load]);
 
   return (
@@ -166,7 +166,7 @@ export function App() {
         </button>
         <span className="topbar-title">{ROUTES.find((r) => r.id === route)?.label}</span>
         <fieldset className="theme-switch">
-          <legend className="sr-only">Tema</legend>
+          <legend className="sr-only">Theme</legend>
           {THEMES.map((t) => (
             <label key={t}>
               <input type="radio" name="theme" value={t} checked={theme === t} onChange={() => chooseTheme(t)} />
@@ -176,8 +176,8 @@ export function App() {
         </fieldset>
       </header>
       <aside id="sidebar" className={menuOpen ? 'sidebar open' : 'sidebar'}>
-        <h1 className="brand">Gestão da Unidade</h1>
-        <nav aria-label="Principal">
+        <h1 className="brand">Unit Management</h1>
+        <nav aria-label="Main">
           {NAV.map((g) => (
             <div key={g.group} className="nav-group">
               <h2>
@@ -206,22 +206,22 @@ export function App() {
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
       <main className="content">
-        {state.status === 'loading' && <p role="status">A carregar…</p>}
+        {state.status === 'loading' && <p role="status">Loading…</p>}
         {state.status === 'error' && (
           <div role="alert" className="error banner">
             <p>{state.message}</p>
-            <button type="button" onClick={() => void load()}>Tentar novamente</button>
+            <button type="button" onClick={() => void load()}>Try again</button>
           </div>
         )}
         {state.status === 'ready' && (
           <>
-            <Panel active={route === 'resumo'}>
+            <Panel active={route === 'overview'}>
               <SummaryView summary={state.data.summary} />
             </Panel>
-            <Panel active={route === 'equipas'}>
+            <Panel active={route === 'teams'}>
               <TeamsView teams={state.data.teams} departments={state.data.departments} onChanged={saved} />
             </Panel>
-            <Panel active={route === 'consultores'}>
+            <Panel active={route === 'consultants'}>
               <ConsultantsView
                 teams={state.data.teams}
                 departments={state.data.departments}
@@ -230,10 +230,10 @@ export function App() {
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'perfis'}>
+            <Panel active={route === 'profiles'}>
               <ProfilesView profiles={state.data.profiles} onChanged={saved} />
             </Panel>
-            <Panel active={route === 'projetos'}>
+            <Panel active={route === 'projects'}>
               <ProjectsView
                 teams={state.data.teams}
                 projects={state.data.projects}
@@ -241,20 +241,20 @@ export function App() {
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'alocacoes'}>
+            <Panel active={route === 'allocations'}>
               <AllocationsView
                 teams={state.data.teams}
                 projects={state.data.projects}
                 consultants={state.data.consultants}
                 allocations={state.data.allocations}
-                projectFilter={params.get('projeto') ?? ''}
+                projectFilter={params.get('project') ?? ''}
                 onFilter={(id) => {
-                  window.location.hash = id === '' ? '#/alocacoes' : `#/alocacoes?projeto=${id}`;
+                  window.location.hash = id === '' ? '#/allocations' : `#/allocations?project=${id}`;
                 }}
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'competencias'}>
+            <Panel active={route === 'skills'}>
               <SkillsView
                 teams={state.data.teams}
                 skills={state.data.skills}
@@ -264,7 +264,7 @@ export function App() {
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'matriz'}>
+            <Panel active={route === 'matrix'}>
               <MatrixView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
@@ -274,7 +274,7 @@ export function App() {
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'formacao'}>
+            <Panel active={route === 'training'}>
               <TrainingView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
@@ -286,19 +286,19 @@ export function App() {
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'objetivos'}>
+            <Panel active={route === 'objectives'}>
               <ObjectivesView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
                 objectives={state.data.objectives}
-                periodFilter={params.get('periodo') ?? ''}
+                periodFilter={params.get('period') ?? ''}
                 onFilter={(p) => {
-                  window.location.hash = p === '' ? '#/objetivos' : `#/objetivos?periodo=${encodeURIComponent(p)}`;
+                  window.location.hash = p === '' ? '#/objectives' : `#/objectives?period=${encodeURIComponent(p)}`;
                 }}
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'avaliacoes'}>
+            <Panel active={route === 'evaluations'}>
               <EvaluationsView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
@@ -307,7 +307,7 @@ export function App() {
                 onChanged={saved}
               />
             </Panel>
-            <Panel active={route === 'exportar'}>
+            <Panel active={route === 'export'}>
               <ExportView summary={state.data.summary} />
             </Panel>
           </>

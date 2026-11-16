@@ -43,15 +43,15 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
     const actualCents = parseOptionalEuroToCents(form.actual);
     const plannedInt = parseHc(form.plannedInt);
     const plannedExt = parseHc(form.plannedExt);
-    if (form.name.trim() === '') next.name = 'Indica o nome da equipa.';
-    if (budgetCents === null) next.budget = 'Formato inválido. Exemplo: 120.000,00';
-    if (actualCents === null) next.actual = 'Formato inválido. Exemplo: 95.500,00';
-    if (plannedInt === null) next.plannedInt = 'Formato inválido. Exemplos: 3 ou 2,5';
-    if (plannedExt === null) next.plannedExt = 'Formato inválido. Exemplos: 3 ou 2,5';
+    if (form.name.trim() === '') next.name = 'Enter the team name.';
+    if (budgetCents === null) next.budget = 'Invalid format. Example: 120.000,00';
+    if (actualCents === null) next.actual = 'Invalid format. Example: 95.500,00';
+    if (plannedInt === null) next.plannedInt = 'Invalid format. Examples: 3 or 2,5';
+    if (plannedExt === null) next.plannedExt = 'Invalid format. Examples: 3 or 2,5';
     setErrors(next);
     setFormError(undefined);
     if (Object.keys(next).length > 0 || budgetCents === null || actualCents === null || plannedInt === null || plannedExt === null) {
-      setFormError('Corrige os campos assinalados.');
+      setFormError('Fix the highlighted fields.');
       queueMicrotask(() => errorRef.current?.focus());
       return;
     }
@@ -71,7 +71,7 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
       await onChanged();
       reset();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      setFormError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
       queueMicrotask(() => errorRef.current?.focus());
     } finally {
       setSaving(false);
@@ -96,7 +96,7 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
     e.preventDefault();
     const name = deptDraft.trim();
     if (name === '') {
-      setDeptError('Indica o nome do departamento.');
+      setDeptError('Enter the department name.');
       queueMicrotask(() => deptErrorRef.current?.focus());
       return;
     }
@@ -106,75 +106,75 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
       setDeptError(undefined);
       await onChanged();
     } catch (err) {
-      setDeptError(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      setDeptError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
       queueMicrotask(() => deptErrorRef.current?.focus());
     }
   }
 
   return (
     <section aria-labelledby="teams-title">
-      <h2 id="teams-title">Equipas</h2>
+      <h2 id="teams-title">Teams</h2>
       <form onSubmit={submit} noValidate className="card form-grid">
-        <h3>{editingId === undefined ? 'Nova equipa' : 'Editar equipa'}</h3>
+        <h3>{editingId === undefined ? 'New team' : 'Edit team'}</h3>
         {formError && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">
             {formError}
           </p>
         )}
-        <Field label="Nome" error={errors.name}>
+        <Field label="Name" error={errors.name}>
           {(c) => <input {...c} name="name" type="text" autoComplete="off" value={form.name} onChange={set('name')} />}
         </Field>
-        <Field label="Departamento" hint="Opcional. Agrupa equipas (ex.: Direção Dados)." error={errors.departmentId}>
+        <Field label="Department" hint="Optional. Groups teams (e.g. Data Division)." error={errors.departmentId}>
           {(c) => (
             <select {...c} name="department" value={form.departmentId} onChange={set('departmentId')}>
-              <option value="">Sem departamento</option>
+              <option value="">No department</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           )}
         </Field>
-        <Field label="Budget em dinheiro (EUR)" hint="Opcional. Deixa vazio se o teu budget é só em headcount." error={errors.budget}>
+        <Field label="Cash budget (EUR)" hint="Optional. Leave empty if your budget is headcount only." error={errors.budget}>
           {(c) => <input {...c} name="budget" type="text" inputMode="decimal" autoComplete="off" value={form.budget} onChange={set('budget')} />}
         </Field>
-        <Field label="Gasto real até hoje (EUR)" hint="Opcional" error={errors.actual}>
+        <Field label="Actual spend to date (EUR)" hint="Optional" error={errors.actual}>
           {(c) => <input {...c} name="actual" type="text" inputMode="decimal" autoComplete="off" value={form.actual} onChange={set('actual')} />}
         </Field>
-        <Field label="Headcount orçamentado: internos" hint="Vagas de internos. Aceita frações: 2,5" error={errors.plannedInt}>
+        <Field label="Budgeted headcount: internal" hint="Internal positions. Fractions allowed: 2,5" error={errors.plannedInt}>
           {(c) => <input {...c} name="plannedInt" type="text" inputMode="decimal" autoComplete="off" value={form.plannedInt} onChange={set('plannedInt')} />}
         </Field>
-        <Field label="Headcount orçamentado: externos" hint="Vagas de externos. Aceita frações: 2,5" error={errors.plannedExt}>
+        <Field label="Budgeted headcount: external" hint="External positions. Fractions allowed: 2,5" error={errors.plannedExt}>
           {(c) => <input {...c} name="plannedExt" type="text" inputMode="decimal" autoComplete="off" value={form.plannedExt} onChange={set('plannedExt')} />}
         </Field>
         <div className="actions">
           <button type="submit" className="primary" disabled={saving}>
-            {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar equipa' : 'Guardar alterações'}
+            {saving ? 'Saving…' : editingId === undefined ? 'Add team' : 'Save changes'}
           </button>
           {editingId !== undefined && (
             <button type="button" onClick={reset}>
-              Cancelar edição
+              Cancel editing
             </button>
           )}
         </div>
       </form>
 
       {teams.length === 0 ? (
-        <p className="empty">Ainda não há equipas. Adiciona a primeira no formulário acima.</p>
+        <p className="empty">No teams yet. Add the first one in the form above.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Equipas da unidade</caption>
+            <caption className="sr-only">Teams in the unit</caption>
             <thead>
               <tr>
-                <th scope="col">Equipa</th>
-                <th scope="col">Departamento</th>
-                <th scope="col" className="num">HC orçamentado: internos</th>
-                <th scope="col" className="num">HC orçamentado: externos</th>
+                <th scope="col">Team</th>
+                <th scope="col">Department</th>
+                <th scope="col" className="num">Budgeted HC: internal</th>
+                <th scope="col" className="num">Budgeted HC: external</th>
                 <th scope="col" className="num">Total</th>
                 <th scope="col" className="num">Budget (EUR)</th>
-                <th scope="col" className="num">Gasto real (EUR)</th>
-                <th scope="col">Atualizado</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col" className="num">Actual spend (EUR)</th>
+                <th scope="col">Updated</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -189,8 +189,8 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
                   <td className="num">{t.budgetCents === 0 ? '—' : formatOptionalCents(t.actualCents)}</td>
                   <td>{t.updatedAt.slice(0, 10)}</td>
                   <td className="row-actions">
-                    <button type="button" className="link" onClick={() => edit(t)} aria-label={`Editar ${t.name}`}>
-                      Editar
+                    <button type="button" className="link" onClick={() => edit(t)} aria-label={`Edit ${t.name}`}>
+                      Edit
                     </button>
                     <ConfirmDelete
                       label={t.name}
@@ -199,7 +199,7 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
                           await api.deleteTeam(t.id);
                           await onChanged();
                         } catch (err) {
-                          setFormError(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                          setFormError(err instanceof ApiError ? err.message : 'Something went wrong.');
                           queueMicrotask(() => errorRef.current?.focus());
                         }
                       }}
@@ -212,18 +212,18 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
         </div>
       )}
 
-      <h3>Departamentos</h3>
+      <h3>Departments</h3>
       <form onSubmit={addDepartment} noValidate className="card form-grid">
         {deptError && (
           <p ref={deptErrorRef} tabIndex={-1} role="alert" className="error banner">
             {deptError}
           </p>
         )}
-        <Field label="Nome do departamento" hint="Ex.: Direção Dados">
+        <Field label="Department name" hint="E.g. Data Division">
           {(c) => <input {...c} name="deptName" type="text" autoComplete="off" value={deptDraft} onChange={(e) => setDeptDraft(e.target.value)} />}
         </Field>
         <div className="actions">
-          <button type="submit" className="primary">Adicionar departamento</button>
+          <button type="submit" className="primary">Add department</button>
         </div>
       </form>
       {departments.length > 0 && (
@@ -238,7 +238,7 @@ export function TeamsView({ teams, departments, onChanged }: Props) {
                     await api.deleteDepartment(d.id);
                     await onChanged();
                   } catch (err) {
-                    setDeptError(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                    setDeptError(err instanceof ApiError ? err.message : 'Something went wrong.');
                     queueMicrotask(() => deptErrorRef.current?.focus());
                   }
                 }}

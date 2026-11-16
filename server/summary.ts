@@ -104,7 +104,7 @@ export function buildSummary(
     c.teamId !== null
       ? (teamById.get(c.teamId)?.name ?? '—')
       : c.departmentId !== null
-        ? `Departamento ${deptById.get(c.departmentId)?.name ?? '—'}`
+        ? `Department ${deptById.get(c.departmentId)?.name ?? '—'}`
         : '—';
   const shares = sharesOf(teams, consultants);
   const skillById = new Map(skills.map((k) => [k.id, k]));
@@ -152,52 +152,52 @@ export function buildSummary(
     const overallocated = members.filter((m) => (pctByConsultant.get(m.id)?.pct ?? 0) > 100);
 
     if (utilisationBp !== null && utilisationBp >= 9000)
-      alerts.push({ type: 'budget_over_90', scope: t.name, message: `Budget consumido: ${pct(utilisationBp)}.` });
+      alerts.push({ type: 'budget_over_90', scope: t.name, message: `Budget used: ${pct(utilisationBp)}.` });
     // Vagas e excessos avaliados por tipo: o total pode bater certo com externos a mais e internos a menos.
     const kinds = [
-      ['interno(s)', gapInternal, plannedInternalC],
-      ['externo(s)', gapExternal, plannedExternalC],
+      ['internal', gapInternal, plannedInternalC],
+      ['external', gapExternal, plannedExternalC],
     ] as const;
     for (const [label, g, planned] of kinds) {
-      if (g > 0) alerts.push({ type: 'vacancies', scope: t.name, message: `${hcText(g)} vaga(s) de ${label} por preencher.` });
+      if (g > 0) alerts.push({ type: 'vacancies', scope: t.name, message: `${hcText(g)} open ${label} position(s).` });
       if (g < 0)
         alerts.push({
           type: 'over_headcount',
           scope: t.name,
-          message: `${hcText(-g)} ${label} acima do orçamentado (${hcText(planned)}).`,
+          message: `${hcText(-g)} ${label} over budget (${hcText(planned)}).`,
         });
     }
     for (const c of externals.filter((m) => m.supplier === null))
-      alerts.push({ type: 'missing_supplier', scope: `${t.name} / ${c.code}`, message: 'Externo sem fornecedor registado.' });
+      alerts.push({ type: 'missing_supplier', scope: `${t.name} / ${c.code}`, message: 'External with no supplier recorded.' });
     for (const c of expiring)
-      alerts.push({ type: 'contract_expiring', scope: `${t.name} / ${c.code}`, message: `Contrato termina a ${c.contractEnd}.` });
+      alerts.push({ type: 'contract_expiring', scope: `${t.name} / ${c.code}`, message: `Contract ends on ${c.contractEnd}.` });
     for (const c of externals.filter((m) => m.costRateCentsPerDay === 0))
-      alerts.push({ type: 'missing_cost_rate', scope: `${t.name} / ${c.code}`, message: 'Externo sem rate registada.' });
+      alerts.push({ type: 'missing_cost_rate', scope: `${t.name} / ${c.code}`, message: 'External with no rate recorded.' });
     if (Date.parse(t.updatedAt) < staleBefore)
       alerts.push({
         type: 'stale_data',
         scope: t.name,
-        message: `Dados da equipa sem atualização há mais de ${STALE_DAYS} dias.`,
+        message: `Team data not updated for more than ${STALE_DAYS} days.`,
       });
     for (const c of members.filter((m) => Date.parse(m.updatedAt) < staleBefore))
       alerts.push({
         type: 'stale_data',
         scope: `${t.name} / ${c.code}`,
-        message: `Consultor sem atualização há mais de ${STALE_DAYS} dias.`,
+        message: `Consultant not updated for more than ${STALE_DAYS} days.`,
       });
     if (t.budgetCents > 0 && projectBudget > t.budgetCents)
       alerts.push({
         type: 'projects_exceed_budget',
         scope: t.name,
-        message: 'A soma do budget dos projetos em aberto excede o budget da equipa.',
+        message: 'The open projects\' budgets add up to more than the team budget.',
       });
     for (const c of unallocated)
-      alerts.push({ type: 'consultant_unallocated', scope: `${t.name} / ${c.code}`, message: 'Ativo sem alocação a nenhum projeto.' });
+      alerts.push({ type: 'consultant_unallocated', scope: `${t.name} / ${c.code}`, message: 'Active but not allocated to any project.' });
     for (const c of overallocated)
       alerts.push({
         type: 'consultant_overallocated',
         scope: `${t.name} / ${c.code}`,
-        message: `Alocado a ${pctByConsultant.get(c.id)?.pct ?? 0}% (acima de 100%).`,
+        message: `Allocated at ${pctByConsultant.get(c.id)?.pct ?? 0}% (above 100%).`,
       });
 
     let skillGaps = 0;
@@ -242,19 +242,19 @@ export function buildSummary(
         alerts.push({
           type: 'skill_gap',
           scope: `${t.name} / ${skillName}`,
-          message: `Faltam ${skillGap} pessoa(s) com nível ≥ ${rq.requiredLevel} (tem ${qualified}, mínimo ${rq.minPeople}).`,
+          message: `Short ${skillGap} person(s) at level ≥ ${rq.requiredLevel} (has ${qualified}, minimum ${rq.minPeople}).`,
         });
         if (gapAfterTraining > 0)
           alerts.push({
             type: 'training_gap_uncovered',
             scope: `${t.name} / ${skillName}`,
-            message: `Mesmo com as formações em aberto (${inTraining}), faltam ${gapAfterTraining} pessoa(s): não há plano que feche o gap.`,
+            message: `Even with open training (${inTraining}), still short ${gapAfterTraining} person(s): no plan closes the gap.`,
           });
       } else if (qualifiedValidated < rq.minPeople) {
         alerts.push({
           type: 'skill_unvalidated',
           scope: `${t.name} / ${skillName}`,
-          message: `A cobertura depende de autoavaliações: só ${qualifiedValidated} de ${rq.minPeople} validada(s).`,
+          message: `Coverage relies on self-assessments: only ${qualifiedValidated} of ${rq.minPeople} validated.`,
         });
       }
     }
@@ -265,7 +265,7 @@ export function buildSummary(
       alerts.push({
         type: 'skill_assessment_old',
         scope: t.name,
-        message: `${oldRatings.length} avaliação(ões) de competências com mais de ${ASSESSMENT_OLD_DAYS} dias.`,
+        message: `${oldRatings.length} skill assessment(s) older than ${ASSESSMENT_OLD_DAYS} days.`,
       });
 
     return {
@@ -314,9 +314,9 @@ export function buildSummary(
     const overdue = os.filter(isOverdueObjective).length;
     const atRisk = os.filter((o) => o.status === 'at_risk').length;
     if (atRisk > 0)
-      alerts.push({ type: 'objective_at_risk', scope: t.name, message: `${atRisk} objetivo(s) em risco.` });
+      alerts.push({ type: 'objective_at_risk', scope: t.name, message: `${atRisk} objective(s) at risk.` });
     if (overdue > 0)
-      alerts.push({ type: 'objective_overdue', scope: t.name, message: `${overdue} objetivo(s) com data limite ultrapassada.` });
+      alerts.push({ type: 'objective_overdue', scope: t.name, message: `${overdue} objective(s) past their due date.` });
     const withoutObjectives = consultants.filter(
       (c) => c.teamId === t.id && c.status === 'active' && !yearObjectives.some((o) => o.consultantId === c.id),
     ).length;
@@ -324,7 +324,7 @@ export function buildSummary(
       alerts.push({
         type: 'consultant_without_objectives',
         scope: t.name,
-        message: `${withoutObjectives} consultor(es) ativo(s) sem objetivos para ${year}.`,
+        message: `${withoutObjectives} active consultant(s) with no objectives for ${year}.`,
       });
     return {
       teamName: t.name,
@@ -346,7 +346,7 @@ export function buildSummary(
         alerts.push({
           type: 'evaluation_pending',
           scope: t.name,
-          message: `${n} consultor(es) sem avaliação final de ${year}.`,
+          message: `${n} consultant(s) with no final evaluation for ${year}.`,
         });
     }
   }
@@ -356,7 +356,7 @@ export function buildSummary(
     alerts.push({
       type: 'training_overdue',
       scope: `${c ? homeName(c) : '—'} / ${c?.code ?? '—'}`,
-      message: `Formação "${tr.title}" com data limite ${tr.dueDate} ultrapassada.`,
+      message: `Training "${tr.title}" is past its due date ${tr.dueDate}.`,
     });
   }
 
@@ -366,18 +366,18 @@ export function buildSummary(
     const gapPct = Math.max(0, p.plannedHeadcount * 100 - allocatedPct);
     const teamName = teamById.get(p.teamId)?.name ?? '—';
     const scope = `${teamName} / ${p.name}`;
-    if (p.status === 'at_risk') alerts.push({ type: 'project_at_risk', scope, message: 'Projeto marcado em risco.' });
+    if (p.status === 'at_risk') alerts.push({ type: 'project_at_risk', scope, message: 'Project flagged at risk.' });
     if (isOpenProject(p) && p.endDate !== null && p.endDate < today)
       alerts.push({
         type: 'project_overdue',
         scope,
-        message: `Data de fim (${p.endDate}) ultrapassada e projeto não concluído.`,
+        message: `End date (${p.endDate}) has passed and the project is not done.`,
       });
     if (isOpenProject(p) && gapPct > 0)
       alerts.push({
         type: 'project_understaffed',
         scope,
-        message: `Precisa de ${p.plannedHeadcount} HC e tem ${fte(allocatedPct)} FTE alocados.`,
+        message: `Needs ${p.plannedHeadcount} HC and has ${fte(allocatedPct)} FTE allocated.`,
       });
     return {
       projectId: p.id,

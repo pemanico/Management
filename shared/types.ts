@@ -18,9 +18,9 @@ export type ProfileInput = { name: string };
 export type Profile = ProfileInput & { id: number; updatedAt: string };
 export const DEFAULT_PROFILES = [
   'Big Data Trainee',
-  'Big Data Júnior',
-  'Big Data Pleno',
-  'Big Data Sénior',
+  'Big Data Junior',
+  'Big Data Mid-level',
+  'Big Data Senior',
   'Big Data Lead',
   'Big Data Manager',
 ] as const;
@@ -94,11 +94,11 @@ export type Allocation = AllocationInput & { updatedAt: string };
 
 export const SKILL_LEVELS = [0, 1, 2, 3, 4] as const;
 export const SKILL_LEVEL_LABEL = [
-  '0 · Sem conhecimento',
-  '1 · Básico',
-  '2 · Autónomo',
-  '3 · Avançado',
-  '4 · Referência / mentor',
+  '0 · No knowledge',
+  '1 · Basic',
+  '2 · Independent',
+  '3 · Advanced',
+  '4 · Reference / mentor',
 ] as const;
 
 export type SkillInput = { name: string; category: string | null };

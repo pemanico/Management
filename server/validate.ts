@@ -65,19 +65,19 @@ function fteIn(v: unknown): number | null {
 }
 
 export function parseTeam(body: unknown): Result<TeamInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const name = text(body.name, 80);
   const budgetCents = intIn(body.budgetCents, 0, MAX_CENTS);
   const actualCents = intIn(body.actualCents, 0, MAX_CENTS);
   const plannedInternalHeadcount = fteIn(body.plannedInternalHeadcount);
   const plannedExternalHeadcount = fteIn(body.plannedExternalHeadcount);
-  if (name === null) return { ok: false, error: 'Nome da equipa inválido (1–80 caracteres).' };
-  if (budgetCents === null) return { ok: false, error: 'Budget inválido.' };
-  if (actualCents === null) return { ok: false, error: 'Gasto real inválido.' };
-  if (plannedInternalHeadcount === null) return { ok: false, error: 'Headcount orçamentado de internos inválido.' };
-  if (plannedExternalHeadcount === null) return { ok: false, error: 'Headcount orçamentado de externos inválido.' };
+  if (name === null) return { ok: false, error: 'Invalid team name (1–80 characters).' };
+  if (budgetCents === null) return { ok: false, error: 'Invalid budget.' };
+  if (actualCents === null) return { ok: false, error: 'Invalid actual spend.' };
+  if (plannedInternalHeadcount === null) return { ok: false, error: 'Invalid budgeted internal headcount.' };
+  if (plannedExternalHeadcount === null) return { ok: false, error: 'Invalid budgeted external headcount.' };
   const departmentId = isBlank(body.departmentId) ? null : intIn(body.departmentId, 1, Number.MAX_SAFE_INTEGER);
-  if (departmentId === null && !isBlank(body.departmentId)) return { ok: false, error: 'Departamento inválido.' };
+  if (departmentId === null && !isBlank(body.departmentId)) return { ok: false, error: 'Invalid department.' };
   return {
     ok: true,
     value: { name, departmentId, budgetCents, actualCents, plannedInternalHeadcount, plannedExternalHeadcount },
@@ -88,78 +88,78 @@ export function parseTeam(body: unknown): Result<TeamInput> {
 const isBlank = (v: unknown) => v === null || v === undefined || v === '';
 
 export function parseProfile(body: unknown): Result<ProfileInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const name = text(body.name, 60);
-  if (name === null) return { ok: false, error: 'Nome do perfil inválido (1–60 caracteres).' };
+  if (name === null) return { ok: false, error: 'Invalid profile name (1–60 characters).' };
   return { ok: true, value: { name } };
 }
 
 export function parseDepartment(body: unknown): Result<DepartmentInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const name = text(body.name, 80);
-  if (name === null) return { ok: false, error: 'Nome do departamento inválido (1–80 caracteres).' };
+  if (name === null) return { ok: false, error: 'Invalid department name (1–80 characters).' };
   return { ok: true, value: { name } };
 }
 
 export function parseConsultant(body: unknown): Result<ConsultantInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const code = typeof body.code === 'string' ? body.code.trim() : '';
   if (!/^[A-Za-z0-9_-]{1,20}$/.test(code))
-    return { ok: false, error: 'Código inválido: usa um código (ex.: C001), 1–20 caracteres, sem espaços.' };
+    return { ok: false, error: 'Invalid code: use a code (e.g. C001), 1–20 characters, no spaces.' };
   // Ou equipa (e outras equipas em fração) ou departamento (manager): nunca os dois.
   const ofDepartment = !isBlank(body.departmentId);
   let teamId: number | null = null;
   let departmentId: number | null = null;
   if (ofDepartment) {
     departmentId = intIn(body.departmentId, 1, Number.MAX_SAFE_INTEGER);
-    if (departmentId === null) return { ok: false, error: 'Departamento inválido.' };
-    if (!isBlank(body.teamId)) return { ok: false, error: 'Escolhe equipa ou departamento, não os dois.' };
+    if (departmentId === null) return { ok: false, error: 'Invalid department.' };
+    if (!isBlank(body.teamId)) return { ok: false, error: 'Choose a team or a department, not both.' };
     if (Array.isArray(body.extraTeams) && body.extraTeams.length > 0)
-      return { ok: false, error: 'Quem está num departamento conta por todas as equipas dele: não tem outras equipas.' };
+      return { ok: false, error: 'A department member counts across all its teams and cannot have other teams.' };
   } else {
     teamId = intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER);
-    if (teamId === null) return { ok: false, error: 'Escolhe uma equipa ou um departamento.' };
+    if (teamId === null) return { ok: false, error: 'Choose a team or a department.' };
   }
   const profile = text(body.profile, 60);
-  if (profile === null) return { ok: false, error: 'Perfil inválido (1–60 caracteres).' };
+  if (profile === null) return { ok: false, error: 'Invalid profile (1–60 characters).' };
   if (!SENIORITIES.includes(body.seniority as Seniority))
-    return { ok: false, error: 'Senioridade inválida.' };
-  if (!STATUSES.includes(body.status as Status)) return { ok: false, error: 'Estado inválido.' };
+    return { ok: false, error: 'Invalid seniority.' };
+  if (!STATUSES.includes(body.status as Status)) return { ok: false, error: 'Invalid status.' };
   if (!CONSULTANT_KINDS.includes(body.kind as ConsultantKind))
-    return { ok: false, error: 'Tipo inválido: interno ou externo.' };
+    return { ok: false, error: 'Invalid type: internal or external.' };
   const external = body.kind === 'external';
   // Internos: a app não guarda rate nem salário, mesmo que venham no pedido.
   let cost: number | null = 0;
   if (external) {
     cost = intIn(body.costRateCentsPerDay, 1, MAX_CENTS);
-    if (cost === null) return { ok: false, error: 'Um consultor externo precisa de rate paga (maior que zero).' };
+    if (cost === null) return { ok: false, error: 'An external consultant needs a rate above zero.' };
   }
   let supplier: string | null = null;
   if (external) {
     supplier = text(body.supplier, 60);
-    if (supplier === null) return { ok: false, error: 'Um consultor externo precisa de fornecedor (1–60 caracteres).' };
+    if (supplier === null) return { ok: false, error: 'An external consultant needs a supplier (1–60 characters).' };
   }
   // Outras equipas (opcional): frações 1–99, sem repetir nem incluir a principal; a principal fica com o resto (≥ 1 %).
   const extraTeams: { teamId: number; pct: number }[] = [];
   if (body.extraTeams !== undefined && body.extraTeams !== null) {
     if (!Array.isArray(body.extraTeams) || body.extraTeams.length > 50)
-      return { ok: false, error: 'Repartição por equipas inválida.' };
+      return { ok: false, error: 'Invalid team split.' };
     for (const x of body.extraTeams as unknown[]) {
-      if (!isRecord(x)) return { ok: false, error: 'Repartição por equipas inválida.' };
+      if (!isRecord(x)) return { ok: false, error: 'Invalid team split.' };
       const tid = intIn(x.teamId, 1, Number.MAX_SAFE_INTEGER);
       const pct = intIn(x.pct, 1, 99);
-      if (tid === null || pct === null) return { ok: false, error: 'Cada equipa adicional precisa de uma percentagem entre 1 e 99.' };
-      if (tid === teamId) return { ok: false, error: 'A equipa principal não pode repetir-se nas outras equipas.' };
-      if (extraTeams.some((e) => e.teamId === tid)) return { ok: false, error: 'Há uma equipa repetida na repartição.' };
+      if (tid === null || pct === null) return { ok: false, error: 'Each additional team needs a percentage from 1 to 99.' };
+      if (tid === teamId) return { ok: false, error: 'The main team cannot also be listed in the other teams.' };
+      if (extraTeams.some((e) => e.teamId === tid)) return { ok: false, error: 'A team is repeated in the split.' };
       extraTeams.push({ teamId: tid, pct });
     }
     if (extraTeams.reduce((a, e) => a + e.pct, 0) > 99)
-      return { ok: false, error: 'As outras equipas somam 100 % ou mais: a equipa principal tem de ficar com pelo menos 1 %.' };
+      return { ok: false, error: 'The other teams add up to 100 % or more: the main team must keep at least 1 %.' };
   }
   let contractEnd: string | null = null;
   if (body.contractEnd !== null && body.contractEnd !== undefined && body.contractEnd !== '') {
     if (typeof body.contractEnd !== 'string' || !isIsoDate(body.contractEnd))
-      return { ok: false, error: 'Data de fim de contrato inválida.' };
+      return { ok: false, error: 'Invalid contract end date.' };
     contractEnd = body.contractEnd;
   }
   return {
@@ -187,24 +187,24 @@ function optDate(v: unknown): { ok: true; value: string | null } | { ok: false }
 }
 
 export function parseProject(body: unknown): Result<ProjectInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const name = text(body.name, 100);
-  if (name === null) return { ok: false, error: 'Nome do projeto inválido (1–100 caracteres).' };
+  if (name === null) return { ok: false, error: 'Invalid project name (1–100 characters).' };
   const teamId = intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER);
-  if (teamId === null) return { ok: false, error: 'Equipa inválida.' };
+  if (teamId === null) return { ok: false, error: 'Invalid team.' };
   if (!PROJECT_STATUSES.includes(body.status as ProjectStatus))
-    return { ok: false, error: 'Estado do projeto inválido.' };
+    return { ok: false, error: 'Invalid project status.' };
   const start = optDate(body.startDate);
   const end = optDate(body.endDate);
-  if (!start.ok) return { ok: false, error: 'Data de início inválida.' };
-  if (!end.ok) return { ok: false, error: 'Data de fim inválida.' };
+  if (!start.ok) return { ok: false, error: 'Invalid start date.' };
+  if (!end.ok) return { ok: false, error: 'Invalid end date.' };
   if (start.value !== null && end.value !== null && end.value < start.value)
-    return { ok: false, error: 'A data de fim não pode ser anterior à de início.' };
+    return { ok: false, error: 'The end date cannot be before the start date.' };
   const budgetCents = intIn(body.budgetCents, 0, MAX_CENTS);
-  if (budgetCents === null) return { ok: false, error: 'Budget do projeto inválido.' };
-  if (!PRIORITIES.includes(body.priority as Priority)) return { ok: false, error: 'Prioridade inválida.' };
+  if (budgetCents === null) return { ok: false, error: 'Invalid project budget.' };
+  if (!PRIORITIES.includes(body.priority as Priority)) return { ok: false, error: 'Invalid priority.' };
   const plannedHeadcount = intIn(body.plannedHeadcount, 0, 10_000);
-  if (plannedHeadcount === null) return { ok: false, error: 'Headcount do projeto inválido.' };
+  if (plannedHeadcount === null) return { ok: false, error: 'Invalid project headcount.' };
   return {
     ok: true,
     value: {
@@ -221,47 +221,47 @@ export function parseProject(body: unknown): Result<ProjectInput> {
 }
 
 export function parseAllocation(body: unknown): Result<AllocationInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const projectId = intIn(body.projectId, 1, Number.MAX_SAFE_INTEGER);
   const consultantId = intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER);
-  if (projectId === null) return { ok: false, error: 'Projeto inválido.' };
-  if (consultantId === null) return { ok: false, error: 'Consultor inválido.' };
+  if (projectId === null) return { ok: false, error: 'Invalid project.' };
+  if (consultantId === null) return { ok: false, error: 'Invalid consultant.' };
   const allocationPct = intIn(body.allocationPct, 1, 100);
-  if (allocationPct === null) return { ok: false, error: 'Alocação inválida (1–100 %).' };
+  if (allocationPct === null) return { ok: false, error: 'Invalid allocation (1–100 %).' };
   return { ok: true, value: { projectId, consultantId, allocationPct } };
 }
 
 export function parseSkill(body: unknown): Result<SkillInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const name = text(body.name, 60);
-  if (name === null) return { ok: false, error: 'Nome da competência inválido (1–60 caracteres).' };
+  if (name === null) return { ok: false, error: 'Invalid skill name (1–60 characters).' };
   let category: string | null = null;
   if (body.category !== null && body.category !== undefined && body.category !== '') {
     category = text(body.category, 40);
-    if (category === null) return { ok: false, error: 'Categoria inválida (máx. 40 caracteres).' };
+    if (category === null) return { ok: false, error: 'Invalid category (max. 40 characters).' };
   }
   return { ok: true, value: { name, category } };
 }
 
 export function parseRating(body: unknown, today = businessDate()): Result<RatingInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const consultantId = intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER);
   const skillId = intIn(body.skillId, 1, Number.MAX_SAFE_INTEGER);
-  if (consultantId === null) return { ok: false, error: 'Consultor inválido.' };
-  if (skillId === null) return { ok: false, error: 'Competência inválida.' };
+  if (consultantId === null) return { ok: false, error: 'Invalid consultant.' };
+  if (skillId === null) return { ok: false, error: 'Invalid skill.' };
   const level = intIn(body.level, 0, 4);
-  if (level === null) return { ok: false, error: 'Nível inválido (0–4).' };
-  if (typeof body.validated !== 'boolean') return { ok: false, error: 'Indica se a avaliação está validada.' };
+  if (level === null) return { ok: false, error: 'Invalid level (0–4).' };
+  if (typeof body.validated !== 'boolean') return { ok: false, error: 'Say whether the assessment is validated.' };
   let evidence: string | null = null;
   if (body.evidence !== null && body.evidence !== undefined && body.evidence !== '') {
     evidence = text(body.evidence, 200);
-    if (evidence === null) return { ok: false, error: 'Evidência inválida (máx. 200 caracteres).' };
+    if (evidence === null) return { ok: false, error: 'Invalid evidence (max. 200 characters).' };
   }
   if (body.validated && evidence === null)
-    return { ok: false, error: 'Uma avaliação validada precisa de evidência (projeto, certificação, entrega).' };
+    return { ok: false, error: 'A validated assessment needs evidence (project, certification, delivery).' };
   if (typeof body.assessedAt !== 'string' || !isIsoDate(body.assessedAt))
-    return { ok: false, error: 'Data da avaliação inválida.' };
-  if (body.assessedAt > today) return { ok: false, error: 'A data da avaliação não pode ser futura.' };
+    return { ok: false, error: 'Invalid date.' };
+  if (body.assessedAt > today) return { ok: false, error: 'The date cannot be in the future.' };
   return {
     ok: true,
     value: { consultantId, skillId, level, validated: body.validated, evidence, assessedAt: body.assessedAt },
@@ -269,35 +269,35 @@ export function parseRating(body: unknown, today = businessDate()): Result<Ratin
 }
 
 export function parseRequirement(body: unknown): Result<RequirementInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const teamId = intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER);
   const skillId = intIn(body.skillId, 1, Number.MAX_SAFE_INTEGER);
-  if (teamId === null) return { ok: false, error: 'Equipa inválida.' };
-  if (skillId === null) return { ok: false, error: 'Competência inválida.' };
+  if (teamId === null) return { ok: false, error: 'Invalid team.' };
+  if (skillId === null) return { ok: false, error: 'Invalid skill.' };
   const requiredLevel = intIn(body.requiredLevel, 1, 4);
-  if (requiredLevel === null) return { ok: false, error: 'Nível exigido inválido (1–4).' };
+  if (requiredLevel === null) return { ok: false, error: 'Invalid required level (1–4).' };
   const minPeople = intIn(body.minPeople, 1, 1000);
-  if (minPeople === null) return { ok: false, error: 'Mínimo de pessoas inválido (≥ 1).' };
+  if (minPeople === null) return { ok: false, error: 'Invalid minimum people (≥ 1).' };
   return { ok: true, value: { teamId, skillId, requiredLevel, minPeople } };
 }
 
 export function parseTraining(body: unknown): Result<TrainingInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const consultantId = intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER);
   const skillId = intIn(body.skillId, 1, Number.MAX_SAFE_INTEGER);
-  if (consultantId === null) return { ok: false, error: 'Consultor inválido.' };
-  if (skillId === null) return { ok: false, error: 'Competência inválida.' };
+  if (consultantId === null) return { ok: false, error: 'Invalid consultant.' };
+  if (skillId === null) return { ok: false, error: 'Invalid skill.' };
   const targetLevel = intIn(body.targetLevel, 1, 4);
-  if (targetLevel === null) return { ok: false, error: 'Nível alvo inválido (1–4).' };
-  if (!TRAINING_KINDS.includes(body.kind as TrainingKind)) return { ok: false, error: 'Tipo de formação inválido.' };
+  if (targetLevel === null) return { ok: false, error: 'Invalid target level (1–4).' };
+  if (!TRAINING_KINDS.includes(body.kind as TrainingKind)) return { ok: false, error: 'Invalid training type.' };
   const title = text(body.title, 100);
-  if (title === null) return { ok: false, error: 'Título inválido (1–100 caracteres).' };
+  if (title === null) return { ok: false, error: 'Invalid title (1–100 characters).' };
   if (!TRAINING_STATUSES.includes(body.status as TrainingStatus))
-    return { ok: false, error: 'Estado da formação inválido.' };
+    return { ok: false, error: 'Invalid training status.' };
   const due = optDate(body.dueDate);
-  if (!due.ok) return { ok: false, error: 'Data limite inválida.' };
+  if (!due.ok) return { ok: false, error: 'Invalid due date.' };
   const costCents = intIn(body.costCents ?? 0, 0, MAX_CENTS);
-  if (costCents === null) return { ok: false, error: 'Custo inválido.' };
+  if (costCents === null) return { ok: false, error: 'Invalid cost.' };
   return {
     ok: true,
     value: {
@@ -314,26 +314,26 @@ export function parseTraining(body: unknown): Result<TrainingInput> {
 }
 
 export function parseObjective(body: unknown): Result<ObjectiveInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const hasC = body.consultantId !== null && body.consultantId !== undefined;
   const hasT = body.teamId !== null && body.teamId !== undefined;
-  if (hasC === hasT) return { ok: false, error: 'Escolhe um consultor OU uma equipa para o objetivo.' };
+  if (hasC === hasT) return { ok: false, error: 'Choose a consultant OR a team for the objective.' };
   const consultantId = hasC ? intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER) : null;
   const teamId = hasT ? intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER) : null;
-  if (hasC && consultantId === null) return { ok: false, error: 'Consultor inválido.' };
-  if (hasT && teamId === null) return { ok: false, error: 'Equipa inválida.' };
+  if (hasC && consultantId === null) return { ok: false, error: 'Invalid consultant.' };
+  if (hasT && teamId === null) return { ok: false, error: 'Invalid team.' };
   const title = text(body.title, 140);
-  if (title === null) return { ok: false, error: 'Título do objetivo inválido (1–140 caracteres).' };
+  if (title === null) return { ok: false, error: 'Invalid objective title (1–140 characters).' };
   if (typeof body.period !== 'string' || !PERIOD_RE.test(body.period))
-    return { ok: false, error: 'Período inválido. Usa 2026, 2026-H1 ou 2026-H2.' };
+    return { ok: false, error: 'Invalid period. Use 2026, 2026-H1 or 2026-H2.' };
   if (!OBJECTIVE_STATUSES.includes(body.status as ObjectiveStatus))
-    return { ok: false, error: 'Estado do objetivo inválido.' };
+    return { ok: false, error: 'Invalid objective status.' };
   const progressPct = intIn(body.progressPct, 0, 100);
-  if (progressPct === null) return { ok: false, error: 'Progresso inválido (0–100 %).' };
+  if (progressPct === null) return { ok: false, error: 'Invalid progress (0–100 %).' };
   if (body.status === 'achieved' && progressPct !== 100)
-    return { ok: false, error: 'Um objetivo atingido tem de ter 100 % de progresso.' };
+    return { ok: false, error: 'An achieved objective must be at 100 % progress.' };
   const due = optDate(body.dueDate);
-  if (!due.ok) return { ok: false, error: 'Data limite inválida.' };
+  if (!due.ok) return { ok: false, error: 'Invalid due date.' };
   return {
     ok: true,
     value: {
@@ -349,22 +349,22 @@ export function parseObjective(body: unknown): Result<ObjectiveInput> {
 }
 
 export function parseEvaluation(body: unknown, today = businessDate()): Result<EvaluationInput> {
-  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  if (!isRecord(body)) return { ok: false, error: 'Invalid request.' };
   const consultantId = intIn(body.consultantId, 1, Number.MAX_SAFE_INTEGER);
-  if (consultantId === null) return { ok: false, error: 'Consultor inválido.' };
+  if (consultantId === null) return { ok: false, error: 'Invalid consultant.' };
   if (typeof body.period !== 'string' || !PERIOD_RE.test(body.period))
-    return { ok: false, error: 'Período inválido. Usa 2026, 2026-H1 ou 2026-H2.' };
+    return { ok: false, error: 'Invalid period. Use 2026, 2026-H1 or 2026-H2.' };
   const rating = intIn(body.rating, 1, 4);
-  if (rating === null) return { ok: false, error: 'Classificação inválida (1–4).' };
+  if (rating === null) return { ok: false, error: 'Invalid rating (1–4).' };
   if (!EVALUATION_STATUSES.includes(body.status as EvaluationStatus))
-    return { ok: false, error: 'Estado da avaliação inválido.' };
+    return { ok: false, error: 'Invalid evaluation status.' };
   const summary = typeof body.summary === 'string' ? body.summary.trim() : '';
-  if (summary.length > 500) return { ok: false, error: 'Resumo demasiado longo (máx. 500 caracteres).' };
+  if (summary.length > 500) return { ok: false, error: 'Summary too long (max. 500 characters).' };
   if (body.status === 'final' && summary === '')
-    return { ok: false, error: 'Uma avaliação final precisa de resumo com a evidência que a sustenta.' };
+    return { ok: false, error: 'A final evaluation needs a summary with the supporting evidence.' };
   if (typeof body.evaluatedAt !== 'string' || !isIsoDate(body.evaluatedAt))
-    return { ok: false, error: 'Data da avaliação inválida.' };
-  if (body.evaluatedAt > today) return { ok: false, error: 'A data da avaliação não pode ser futura.' };
+    return { ok: false, error: 'Invalid date.' };
+  if (body.evaluatedAt > today) return { ok: false, error: 'The date cannot be in the future.' };
   return {
     ok: true,
     value: { consultantId, period: body.period, rating, summary, status: body.status as EvaluationStatus, evaluatedAt: body.evaluatedAt },

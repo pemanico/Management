@@ -30,8 +30,8 @@ export function ProfilesView({ profiles, onChanged }: Props) {
     e.preventDefault();
     const clean = name.trim();
     if (clean === '' || clean.length > 60) {
-      setFieldError('Indica o nome do perfil (1–60 caracteres).');
-      return fail('Corrige os campos assinalados.');
+      setFieldError('Enter the profile name (1–60 characters).');
+      return fail('Fix the highlighted fields.');
     }
     setFieldError(undefined);
     setSaving(true);
@@ -41,7 +41,7 @@ export function ProfilesView({ profiles, onChanged }: Props) {
       await onChanged();
       reset();
     } catch (err) {
-      fail(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      fail(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
       setSaving(false);
     }
@@ -56,43 +56,43 @@ export function ProfilesView({ profiles, onChanged }: Props) {
 
   return (
     <section aria-labelledby="profiles-title">
-      <h2 id="profiles-title">Perfis</h2>
+      <h2 id="profiles-title">Profiles</h2>
       <p className="muted-text">
-        Esta é a lista de perfis que os consultores podem escolher. Todos ficam com o mesmo nome. Ao renomear um perfil, os
-        consultores que o usam passam automaticamente para o novo nome.
+        This is the list of profiles consultants can be given, so everyone uses the same names. Renaming a profile
+        also renames it on the consultants that use it.
       </p>
       <form onSubmit={submit} noValidate className="card form-grid">
-        <h3>{editingId === undefined ? 'Novo perfil' : 'Renomear perfil'}</h3>
+        <h3>{editingId === undefined ? 'New profile' : 'Rename profile'}</h3>
         {error && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="error banner">
             {error}
           </p>
         )}
-        <Field label="Nome do perfil" hint="Ex.: Big Data Pleno" error={fieldError}>
+        <Field label="Profile name" hint="E.g. Big Data Mid-level" error={fieldError}>
           {(c) => <input {...c} name="profileName" type="text" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />}
         </Field>
         <div className="actions">
           <button type="submit" className="primary" disabled={saving}>
-            {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar perfil' : 'Guardar nome'}
+            {saving ? 'Saving…' : editingId === undefined ? 'Add profile' : 'Save name'}
           </button>
           {editingId !== undefined && (
             <button type="button" onClick={reset}>
-              Cancelar
+              Cancel
             </button>
           )}
         </div>
       </form>
 
       {profiles.length === 0 ? (
-        <p className="empty">Ainda não há perfis. Adiciona o primeiro no formulário acima.</p>
+        <p className="empty">No profiles yet. Add the first one in the form above.</p>
       ) : (
         <div className="table-wrap">
           <table>
-            <caption className="sr-only">Perfis disponíveis para os consultores</caption>
+            <caption className="sr-only">Profiles available to consultants</caption>
             <thead>
               <tr>
-                <th scope="col">Perfil</th>
-                <th scope="col"><span className="sr-only">Ações</span></th>
+                <th scope="col">Profile</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -100,8 +100,8 @@ export function ProfilesView({ profiles, onChanged }: Props) {
                 <tr key={p.id}>
                   <th scope="row">{p.name}</th>
                   <td className="row-actions">
-                    <button type="button" className="link" onClick={() => edit(p)} aria-label={`Renomear ${p.name}`}>
-                      Renomear
+                    <button type="button" className="link" onClick={() => edit(p)} aria-label={`Rename ${p.name}`}>
+                      Rename
                     </button>
                     <ConfirmDelete
                       label={p.name}
@@ -110,7 +110,7 @@ export function ProfilesView({ profiles, onChanged }: Props) {
                           await api.deleteProfile(p.id);
                           await onChanged();
                         } catch (err) {
-                          fail(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                          fail(err instanceof ApiError ? err.message : 'Something went wrong.');
                         }
                       }}
                     />
