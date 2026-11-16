@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { usePersistedState } from '../usePersistedState.ts';
 import {
   SKILL_LEVEL_LABEL,
   type Consultant,
@@ -34,7 +35,7 @@ const todayIso = () => businessDate();
 const blank = (): Form => ({ consultantId: '', skillId: '', level: '2', validated: false, evidence: '', assessedAt: todayIso() });
 
 export function MatrixView({ teams, consultants, skills, ratings, requirements, onChanged }: Props) {
-  const [form, setForm] = useState<Form>(blank);
+  const [form, setForm] = usePersistedState<Form>('gu:matriz:form', blank);
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
@@ -134,7 +135,14 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
             {consultants.map((c) => (
               <tr key={c.id} className={c.status === 'inactive' ? 'muted' : undefined}>
                 <th scope="row">{c.code}</th>
-                <td>{teamName.get(c.teamId) ?? '—'}</td>
+                <td>
+                  {teamName.get(c.teamId) ?? '—'}
+                  {c.extraTeams.length > 0 && (
+                    <span className="muted-text">
+                      {' '}(partilhado: {c.extraTeams.map((x) => `${teamName.get(x.teamId) ?? '—'} ${x.pct} %`).join(', ')})
+                    </span>
+                  )}
+                </td>
                 {skills.map((k) => {
                   const r = ratingMap.get(`${c.id}:${k.id}`);
                   const req = reqMap.get(`${c.teamId}:${k.id}`);

@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { usePersistedState } from '../usePersistedState.ts';
 import {
   SKILL_LEVEL_LABEL,
   TRAINING_KINDS,
@@ -68,8 +69,8 @@ const EMPTY: Form = {
 };
 
 export function TrainingView({ teams, consultants, skills, ratings, requirements, trainings, coverage, onChanged }: Props) {
-  const [form, setForm] = useState<Form>(EMPTY);
-  const [editingId, setEditingId] = useState<number | undefined>();
+  const [form, setForm] = usePersistedState<Form>('gu:formacao:form', EMPTY);
+  const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:formacao:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);

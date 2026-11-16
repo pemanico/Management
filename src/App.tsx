@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Allocation, Consultant, Evaluation, Objective, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
 import { api, ApiError } from './api.ts';
 import { SummaryView } from './views/SummaryView.tsx';
@@ -31,6 +31,11 @@ type RouteId = (typeof ROUTES)[number]['id'];
 function readHash(): { route: RouteId; params: URLSearchParams } {
   const [path = '', query = ''] = window.location.hash.replace('#/', '').split('?');
   return { route: ROUTES.find((r) => r.id === path)?.id ?? 'resumo', params: new URLSearchParams(query) };
+}
+
+// As vistas ficam montadas e só se escondem: trocar de rota não perde o estado dos formulários.
+function Panel({ active, children }: { active: boolean; children: ReactNode }) {
+  return <div hidden={!active}>{children}</div>;
 }
 
 type Data = {
@@ -128,20 +133,24 @@ export function App() {
         )}
         {state.status === 'ready' && (
           <>
-            {route === 'resumo' && <SummaryView summary={state.data.summary} />}
-            {route === 'equipas' && <TeamsView teams={state.data.teams} onChanged={saved} />}
-            {route === 'consultores' && (
+            <Panel active={route === 'resumo'}>
+              <SummaryView summary={state.data.summary} />
+            </Panel>
+            <Panel active={route === 'equipas'}>
+              <TeamsView teams={state.data.teams} onChanged={saved} />
+            </Panel>
+            <Panel active={route === 'consultores'}>
               <ConsultantsView teams={state.data.teams} consultants={state.data.consultants} onChanged={saved} />
-            )}
-            {route === 'projetos' && (
+            </Panel>
+            <Panel active={route === 'projetos'}>
               <ProjectsView
                 teams={state.data.teams}
                 projects={state.data.projects}
                 allocations={state.data.allocations}
                 onChanged={saved}
               />
-            )}
-            {route === 'alocacoes' && (
+            </Panel>
+            <Panel active={route === 'alocacoes'}>
               <AllocationsView
                 teams={state.data.teams}
                 projects={state.data.projects}
@@ -153,8 +162,8 @@ export function App() {
                 }}
                 onChanged={saved}
               />
-            )}
-            {route === 'competencias' && (
+            </Panel>
+            <Panel active={route === 'competencias'}>
               <SkillsView
                 teams={state.data.teams}
                 skills={state.data.skills}
@@ -163,8 +172,8 @@ export function App() {
                 coverage={state.data.summary.skills.coverage}
                 onChanged={saved}
               />
-            )}
-            {route === 'matriz' && (
+            </Panel>
+            <Panel active={route === 'matriz'}>
               <MatrixView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
@@ -173,8 +182,8 @@ export function App() {
                 requirements={state.data.requirements}
                 onChanged={saved}
               />
-            )}
-            {route === 'formacao' && (
+            </Panel>
+            <Panel active={route === 'formacao'}>
               <TrainingView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
@@ -185,8 +194,8 @@ export function App() {
                 coverage={state.data.summary.skills.coverage}
                 onChanged={saved}
               />
-            )}
-            {route === 'objetivos' && (
+            </Panel>
+            <Panel active={route === 'objetivos'}>
               <ObjectivesView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
@@ -197,8 +206,8 @@ export function App() {
                 }}
                 onChanged={saved}
               />
-            )}
-            {route === 'avaliacoes' && (
+            </Panel>
+            <Panel active={route === 'avaliacoes'}>
               <EvaluationsView
                 teams={state.data.teams}
                 consultants={state.data.consultants}
@@ -206,8 +215,10 @@ export function App() {
                 evaluations={state.data.evaluations}
                 onChanged={saved}
               />
-            )}
-            {route === 'exportar' && <ExportView summary={state.data.summary} />}
+            </Panel>
+            <Panel active={route === 'exportar'}>
+              <ExportView summary={state.data.summary} />
+            </Panel>
           </>
         )}
       </main>

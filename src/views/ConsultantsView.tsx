@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { usePersistedState } from '../usePersistedState.ts';
 import { WORK_DAYS_PER_MONTH, WORK_MONTHS_PER_YEAR, CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Seniority, type Status, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatCents, parseEuroToCents } from '../money.ts';
@@ -29,8 +30,8 @@ const KIND_LABEL: Record<ConsultantKind, string> = { internal: 'Interno', extern
 const STATUS_LABEL: Record<Status, string> = { active: 'Ativo', inactive: 'Inativo' };
 
 export function ConsultantsView({ teams, consultants, onChanged }: Props) {
-  const [form, setForm] = useState<Form>(EMPTY);
-  const [editingId, setEditingId] = useState<number | undefined>();
+  const [form, setForm] = usePersistedState<Form>('gu:consultores:form', EMPTY);
+  const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:consultores:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);

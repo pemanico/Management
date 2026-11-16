@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { usePersistedState } from '../usePersistedState.ts';
 import {
   OBJECTIVE_STATUSES,
   PERIOD_RE,
@@ -35,8 +36,8 @@ type Errors = Partial<Record<keyof Form, string>>;
 export function ObjectivesView({ teams, consultants, objectives, periodFilter, onFilter, onChanged }: Props) {
   const year = businessDate().slice(0, 4);
   const empty: Form = { scope: '', title: '', period: year, status: 'not_started', progress: '0', dueDate: '' };
-  const [form, setForm] = useState<Form>(empty);
-  const [editingId, setEditingId] = useState<number | undefined>();
+  const [form, setForm] = usePersistedState<Form>('gu:objetivos:form', empty);
+  const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:objetivos:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
