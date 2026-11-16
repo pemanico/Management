@@ -15,6 +15,8 @@ import type {
   RequirementInput,
   Skill,
   SkillInput,
+  Department,
+  DepartmentInput,
   Summary,
   Team,
   TeamInput,
@@ -50,6 +52,12 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
 export const api = {
   summary: () => request<Summary>('/summary'),
   teams: () => request<Team[]>('/teams'),
+  departments: () => request<Department[]>('/departments'),
+  saveDepartment: (input: DepartmentInput, id?: number) =>
+    id === undefined
+      ? request<Department>('/departments', 'POST', input)
+      : request<Department>(`/departments/${id}`, 'PUT', input),
+  deleteDepartment: (id: number) => request<{ ok: true }>(`/departments/${id}`, 'DELETE'),
   consultants: () => request<Consultant[]>('/consultants'),
   saveTeam: (input: TeamInput, id?: number) =>
     id === undefined ? request<Team>('/teams', 'POST', input) : request<Team>(`/teams/${id}`, 'PUT', input),

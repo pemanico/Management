@@ -5,6 +5,7 @@ import { centsToDecimal, toCsv } from './csv.ts';
 import {
   parseAllocation,
   parseConsultant,
+  parseDepartment,
   parseEvaluation,
   parseObjective,
   parseProject,
@@ -91,6 +92,8 @@ export function createApp(db: Db): Server {
             db.listTrainings(),
             db.listObjectives(),
             db.listEvaluations(),
+            new Date(),
+            db.listDepartments(),
           ),
         );
       }
@@ -114,11 +117,12 @@ export function createApp(db: Db): Server {
         }
         if (kind === 'consultants') {
           const teams = new Map(db.listTeams().map((t) => [t.id, t.name]));
+          const depts = new Map(db.listDepartments().map((d) => [d.id, d.name]));
           const csv = toCsv(
             ['codigo', 'equipa_principal', 'outras_equipas', 'perfil', 'senioridade', 'tipo', 'fornecedor', 'rate_dia_eur', 'fim_contrato', 'estado', 'atualizado_em'],
             db.listConsultants().map((c) => [
               c.code,
-              teams.get(c.teamId) ?? '',
+              c.teamId !== null ? (teams.get(c.teamId) ?? '') : `Departamento ${depts.get(c.departmentId ?? 0) ?? ''}`,
               c.extraTeams.map((x) => `${teams.get(x.teamId) ?? ''} ${x.pct}%`).join(' | '),
               c.profile,
               c.seniority,
@@ -237,11 +241,57 @@ export function createApp(db: Db): Server {
         throw new HttpError(400, 'kind inválido.');
       }
 
+      if (resource === 'departments') {
+        if (!idPart && method === 'GET') return send(res, 200, db.listDepartments());
+        if (!idPart && method === 'POST') {
+          const p = parseDepartment(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            return send(res, 201, db.getDepartment(db.createDepartment(p.value)));
+          } catch (e) {
+            if (isConstraint(e)) throw new HttpError(409, 'Já existe um departamento com esse nome.');
+            throw e;
+          }
+        }
+        if (idPart && method === 'PUT') {
+          const id = parseId(idPart);
+          const p = parseDepartment(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            if (db.updateDepartment(id, p.value) === 0) throw new HttpError(404, 'Departamento não encontrado.');
+          } catch (e) {
+            if (e instanceof HttpError) throw e;
+            if (isConstraint(e)) throw new HttpError(409, 'Já existe um departamento com esse nome.');
+            throw e;
+          }
+          return send(res, 200, db.getDepartment(id));
+        }
+        if (idPart && method === 'DELETE') {
+          try {
+            if (db.deleteDepartment(parseId(idPart)) === 0) throw new HttpError(404, 'Departamento não encontrado.');
+          } catch (e) {
+            if (e instanceof HttpError) throw e;
+            if (isConstraint(e)) throw new HttpError(409, 'O departamento tem equipas ou pessoas; muda-as primeiro.');
+            throw e;
+          }
+          return send(res, 200, { ok: true });
+        }
+      }
+
+      // Departamento tem de existir e ter pelo menos uma equipa (senão a pessoa não conta em nenhuma).
+      const checkDepartment = (departmentId: number | null, needsTeams: boolean) => {
+        if (departmentId === null) return;
+        if (!db.getDepartment(departmentId)) throw new HttpError(400, 'Departamento inexistente.');
+        if (needsTeams && !db.listTeams().some((t) => t.departmentId === departmentId))
+          throw new HttpError(400, 'O departamento ainda não tem equipas: associa-lhe equipas primeiro.');
+      };
+
       if (resource === 'teams') {
         if (!idPart && method === 'GET') return send(res, 200, db.listTeams());
         if (!idPart && method === 'POST') {
           const p = parseTeam(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
+          checkDepartment(p.value.departmentId, false);
           try {
             return send(res, 201, db.getTeam(db.createTeam(p.value)));
           } catch (e) {
@@ -253,6 +303,7 @@ export function createApp(db: Db): Server {
           const id = parseId(idPart);
           const p = parseTeam(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
+          checkDepartment(p.value.departmentId, false);
           try {
             if (db.updateTeam(id, p.value) === 0) throw new HttpError(404, 'Equipa não encontrada.');
           } catch (e) {
@@ -281,6 +332,7 @@ export function createApp(db: Db): Server {
         if (!idPart && method === 'POST') {
           const p = parseConsultant(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
+          checkDepartment(p.value.departmentId, true);
           try {
             return send(res, 201, db.getConsultant(db.createConsultant(p.value)));
           } catch (e) {
@@ -291,6 +343,7 @@ export function createApp(db: Db): Server {
           const id = parseId(idPart);
           const p = parseConsultant(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
+          checkDepartment(p.value.departmentId, true);
           try {
             if (db.updateConsultant(id, p.value) === 0)
               throw new HttpError(404, 'Consultor não encontrado.');

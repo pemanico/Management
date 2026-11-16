@@ -5,6 +5,7 @@ import { openDb } from './db.ts';
 import { createApp } from './app.ts';
 import { csvCell } from './csv.ts';
 import { businessDate } from '../shared/dates.ts';
+import type { ConsultantInput } from '../shared/types.ts';
 
 async function setup() {
   const db = openDb(':memory:');
@@ -439,4 +440,88 @@ test('pessoas repartidas por equipas: headcount e custo em frações, sem dupla 
   } finally {
     close();
   }
+});
+
+test('departamento: manager conta por igual em todas as equipas do departamento', async () => {
+  const { call, close } = await setup();
+  try {
+    const mkTeam = async (name: string, deptId: number | null) =>
+      ((await call('/api/teams', 'POST', { name, departmentId: deptId, budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 1, plannedExternalHeadcount: 0 })).data as any).id as number;
+    const dep = (await call('/api/departments', 'POST', { name: 'Direção Dados' })).data as any;
+    assert.equal(dep.name, 'Direção Dados');
+    const a = await mkTeam('A', dep.id);
+    await mkTeam('B', dep.id);
+    const c = await mkTeam('C', dep.id);
+    const solo = await mkTeam('Solo', null);
+    const base: Omit<ConsultantInput, 'code' | 'teamId' | 'departmentId'> = { profile: 'Manager', seniority: 'lead', kind: 'internal', supplier: null, costRateCentsPerDay: 0, contractEnd: null, status: 'active', extraTeams: [] };
+
+    // validações: equipa e departamento não se misturam; departamento tem de existir e ter equipas
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'M0', teamId: a, departmentId: dep.id })).status, 400);
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'M0', teamId: null, departmentId: 9999 })).status, 400);
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'M0', teamId: null, departmentId: dep.id, extraTeams: [{ teamId: solo, pct: 10 }] })).status, 400);
+    const empty = (await call('/api/departments', 'POST', { name: 'Vazio' })).data as any;
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'M0', teamId: null, departmentId: empty.id })).status, 400);
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'M0', teamId: null, departmentId: null })).status, 400);
+
+    const m = await call('/api/consultants', 'POST', { ...base, code: 'M1', teamId: null, departmentId: dep.id });
+    assert.equal(m.status, 201);
+    assert.equal((m.data as any).teamId, null);
+    assert.equal((m.data as any).departmentId, dep.id);
+
+    // 1 pessoa dividida por 3 equipas: 34 / 33 / 33 (sobra para as primeiras por id), soma sempre 1
+    const s = (await call('/api/summary')).data as any;
+    const byName = Object.fromEntries(s.teams.map((t: any) => [t.name, t]));
+    assert.deepEqual([byName.A.internalHeadcount, byName.B.internalHeadcount, byName.C.internalHeadcount], [0.34, 0.33, 0.33]);
+    assert.equal(byName.Solo.internalHeadcount, 0);
+    assert.equal(s.totals.activeHeadcount, 1);
+    assert.equal(s.totals.sharedPeople, 1);
+    assert.equal(byName.A.sharedIn, 1);
+    assert.ok(s.alerts.some((x: any) => x.type === 'vacancies' && x.scope === 'A')); // planeado 1 interno, têm 0,34
+
+    // não se apaga um departamento com equipas
+    assert.equal((await call(`/api/departments/${dep.id}`, 'DELETE')).status, 409);
+    assert.equal((await call(`/api/teams/${c}`, 'PUT', { name: 'C', departmentId: null, budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 1, plannedExternalHeadcount: 0 })).status, 200);
+    // com C fora do departamento, o manager passa a 1/2 em A e B (a equipa solta não entra)
+    const s2 = (await call('/api/summary')).data as any;
+    const byName2 = Object.fromEntries(s2.teams.map((t: any) => [t.name, t]));
+    assert.deepEqual([byName2.A.internalHeadcount, byName2.B.internalHeadcount, byName2.C.internalHeadcount], [0.5, 0.5, 0]);
+    assert.equal((await call(`/api/departments/${dep.id}`, 'PUT', { name: 'Direção Dados e IA' })).status, 200);
+  } finally {
+    close();
+  }
+});
+
+test('migração: base com consultores de team_id obrigatório é recriada sem perder dados', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const path = join(mkdtempSync(join(tmpdir(), 'um-')), 'old-consultants.sqlite');
+  const old = new DatabaseSync(path);
+  old.exec(`CREATE TABLE teams (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, budget_cents INTEGER NOT NULL,
+    actual_cents INTEGER NOT NULL, planned_headcount INTEGER NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE consultants (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE RESTRICT,
+    profile TEXT NOT NULL, seniority TEXT NOT NULL, cost_rate_cents_per_day INTEGER NOT NULL, bill_rate_cents_per_day INTEGER,
+    contract_end TEXT, status TEXT NOT NULL, updated_at TEXT NOT NULL);
+    INSERT INTO teams VALUES (1,'Equipa A',0,0,2,'2026-01-01T00:00:00Z');
+    INSERT INTO consultants (id, code, team_id, profile, seniority, cost_rate_cents_per_day, status, updated_at)
+      VALUES (7,'C007',1,'QA','pleno',30000,'active','2026-01-01T00:00:00Z');`);
+  old.close();
+  const db = openDb(path);
+  const c = db.getConsultant(7)!;
+  assert.equal(c.code, 'C007');
+  assert.equal(c.teamId, 1);
+  assert.equal(c.departmentId, null);
+  assert.equal(c.kind, 'external'); // migrado como antes
+  // a nova forma aceita um manager de departamento e continua a recusar pessoas sem nada
+  const d = db.createDepartment({ name: 'Direção' });
+  db.createTeam({ name: 'Equipa B', departmentId: d, budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 0 });
+  const base: Omit<ConsultantInput, 'code' | 'teamId' | 'departmentId'> = { profile: 'Manager', seniority: 'lead', kind: 'internal', supplier: null, costRateCentsPerDay: 0, contractEnd: null, status: 'active', extraTeams: [] };
+  const mgr = db.createConsultant({ ...base, code: 'M1', teamId: null, departmentId: d });
+  assert.ok(mgr > 7);
+  assert.throws(() => db.createConsultant({ ...base, code: 'M2', teamId: null, departmentId: null }));
+  assert.throws(() => db.createConsultant({ ...base, code: 'M3', teamId: 1, departmentId: d }));
+  // as chaves estrangeiras continuam ativas depois da migração
+  assert.throws(() => db.createConsultant({ ...base, code: 'M4', teamId: 999, departmentId: null }));
+  db.close();
 });

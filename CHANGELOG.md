@@ -2,6 +2,14 @@
 
 Do mais recente para o mais antigo.
 
+## 2026-11-16
+
+- Departamentos: agrupam equipas (opcional). O manager fica ligado a um departamento, sem equipa principal, e conta em partes iguais por todas as equipas dele.
+- Migração: `consultants.team_id` passa a opcional (recriação da tabela, com dados copiados). Fazer cópia da base antes de arrancar.
+- Vistas montadas em paralelo: trocar de rota não perde o que estava escrito num formulário.
+- Rascunhos de formulário guardados no browser (localStorage) até gravar ou apagar.
+- Skill matrix mostra pessoas repartidas por outras equipas com a percentagem.
+
 ## 2026-11-13
 
 - Pessoas repartidas por várias equipas: equipa principal + outras equipas com percentagem; headcount e custo contam por fração; headcount orçamentado aceita decimais.

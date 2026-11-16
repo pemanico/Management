@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { teamLabel } from '../home.ts';
 import { usePersistedState } from '../usePersistedState.ts';
 import {
   SKILL_LEVEL_LABEL,
@@ -136,7 +137,7 @@ export function MatrixView({ teams, consultants, skills, ratings, requirements, 
               <tr key={c.id} className={c.status === 'inactive' ? 'muted' : undefined}>
                 <th scope="row">{c.code}</th>
                 <td>
-                  {teamName.get(c.teamId) ?? '—'}
+                  {teamLabel(c, teamName)}
                   {c.extraTeams.length > 0 && (
                     <span className="muted-text">
                       {' '}(partilhado: {c.extraTeams.map((x) => `${teamName.get(x.teamId) ?? '—'} ${x.pct} %`).join(', ')})

@@ -14,6 +14,8 @@ import type {
   Skill,
   SkillInput,
   ConsultantInput,
+  Department,
+  DepartmentInput,
   Project,
   ProjectInput,
   Team,
@@ -23,9 +25,15 @@ import type {
 } from '../shared/types.ts';
 
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS departments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS teams (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
+  department_id INTEGER REFERENCES departments(id) ON DELETE RESTRICT,
   budget_cents INTEGER NOT NULL CHECK (budget_cents >= 0),
   actual_cents INTEGER NOT NULL CHECK (actual_cents >= 0),
   planned_headcount INTEGER NOT NULL CHECK (planned_headcount >= 0),
@@ -37,7 +45,8 @@ CREATE TABLE IF NOT EXISTS teams (
 CREATE TABLE IF NOT EXISTS consultants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   code TEXT NOT NULL UNIQUE,
-  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE RESTRICT,
+  team_id INTEGER REFERENCES teams(id) ON DELETE RESTRICT,
+  department_id INTEGER REFERENCES departments(id) ON DELETE RESTRICT,
   profile TEXT NOT NULL,
   seniority TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'external',
@@ -46,7 +55,9 @@ CREATE TABLE IF NOT EXISTS consultants (
   bill_rate_cents_per_day INTEGER CHECK (bill_rate_cents_per_day IS NULL OR bill_rate_cents_per_day >= 0),
   contract_end TEXT,
   status TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  -- Ou está numa equipa (e pode ter frações noutras), ou está num departamento (manager): nunca os dois, nunca nenhum.
+  CHECK ((team_id IS NULL) <> (department_id IS NULL))
 );
 CREATE TABLE IF NOT EXISTS consultant_teams (
   consultant_id INTEGER NOT NULL REFERENCES consultants(id) ON DELETE CASCADE,
@@ -163,12 +174,12 @@ const PROJECT_SELECT = `SELECT id, name, team_id AS teamId, status, start_date A
 const ALLOCATION_SELECT = `SELECT project_id AS projectId, consultant_id AS consultantId,
   allocation_pct AS allocationPct, updated_at AS updatedAt FROM allocations`;
 
-const TEAM_SELECT = `SELECT id, name, budget_cents AS budgetCents, actual_cents AS actualCents,
+const TEAM_SELECT = `SELECT id, name, department_id AS departmentId, budget_cents AS budgetCents, actual_cents AS actualCents,
   (planned_internal_c + planned_external_c) / 100.0 AS plannedHeadcount,
   planned_internal_c / 100.0 AS plannedInternalHeadcount,
   planned_external_c / 100.0 AS plannedExternalHeadcount, updated_at AS updatedAt FROM teams`;
 
-const CONSULTANT_SELECT = `SELECT id, code, team_id AS teamId, profile, seniority,
+const CONSULTANT_SELECT = `SELECT id, code, team_id AS teamId, department_id AS departmentId, profile, seniority,
   kind, cost_rate_cents_per_day AS costRateCentsPerDay, supplier,
   contract_end AS contractEnd, status, updated_at AS updatedAt FROM consultants`;
 
@@ -182,6 +193,49 @@ export function openDb(path: string) {
   if (!consultantCols.includes('kind'))
     db.exec("ALTER TABLE consultants ADD COLUMN kind TEXT NOT NULL DEFAULT 'external'");
   if (!consultantCols.includes('supplier')) db.exec('ALTER TABLE consultants ADD COLUMN supplier TEXT');
+  // Departamentos: equipas podem pertencer a um departamento (opcional). Bases antigas não têm a coluna.
+  const teamDeptCols = (db.prepare('PRAGMA table_info(teams)').all() as { name: string }[]).map((c) => c.name);
+  if (!teamDeptCols.includes('department_id'))
+    db.exec('ALTER TABLE teams ADD COLUMN department_id INTEGER REFERENCES departments(id) ON DELETE RESTRICT');
+  // Consultores: team_id passa a opcional (manager ligado a um departamento). SQLite não tira o NOT NULL com ALTER,
+  // por isso a tabela é recriada com os dados copiados, seguindo o procedimento oficial (chaves estrangeiras desligadas).
+  const teamIdCol = (db.prepare('PRAGMA table_info(consultants)').all() as { name: string; notnull: number }[]).find(
+    (c) => c.name === 'team_id',
+  );
+  if (teamIdCol?.notnull === 1) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('BEGIN');
+    try {
+      db.exec(`CREATE TABLE consultants_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL UNIQUE,
+        team_id INTEGER REFERENCES teams(id) ON DELETE RESTRICT,
+        department_id INTEGER REFERENCES departments(id) ON DELETE RESTRICT,
+        profile TEXT NOT NULL,
+        seniority TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'external',
+        supplier TEXT,
+        cost_rate_cents_per_day INTEGER NOT NULL CHECK (cost_rate_cents_per_day >= 0),
+        bill_rate_cents_per_day INTEGER CHECK (bill_rate_cents_per_day IS NULL OR bill_rate_cents_per_day >= 0),
+        contract_end TEXT,
+        status TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK ((team_id IS NULL) <> (department_id IS NULL))
+      )`);
+      db.exec(`INSERT INTO consultants_new (id, code, team_id, department_id, profile, seniority, kind, supplier,
+        cost_rate_cents_per_day, bill_rate_cents_per_day, contract_end, status, updated_at)
+        SELECT id, code, team_id, NULL, profile, seniority, kind, supplier,
+        cost_rate_cents_per_day, bill_rate_cents_per_day, contract_end, status, updated_at FROM consultants`);
+      db.exec('DROP TABLE consultants');
+      db.exec('ALTER TABLE consultants_new RENAME TO consultants');
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON');
+    }
+  }
   // Bases antigas: o headcount era um só número e todos os consultores migraram como externos,
   // por isso o budget existente passa a ser de externos (coerente; corrige-se em Equipas).
   const teamCols = (db.prepare('PRAGMA table_info(teams)').all() as { name: string }[]).map((c) => c.name);
@@ -245,20 +299,30 @@ export function openDb(path: string) {
     createTeam: (t: TeamInput) => {
       const r = db
         .prepare(
-          'INSERT INTO teams (name, budget_cents, actual_cents, planned_headcount, planned_external_headcount, planned_internal_c, planned_external_c, updated_at) VALUES (?,?,?,?,?,?,?,?)',
+          'INSERT INTO teams (name, department_id, budget_cents, actual_cents, planned_headcount, planned_external_headcount, planned_internal_c, planned_external_c, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
         )
-        .run(t.name, t.budgetCents, t.actualCents, ...hc(t), now());
+        .run(t.name, t.departmentId, t.budgetCents, t.actualCents, ...hc(t), now());
       return Number(r.lastInsertRowid);
     },
     updateTeam: (id: number, t: TeamInput) =>
       Number(
         db
           .prepare(
-            'UPDATE teams SET name=?, budget_cents=?, actual_cents=?, planned_headcount=?, planned_external_headcount=?, planned_internal_c=?, planned_external_c=?, updated_at=? WHERE id=?',
+            'UPDATE teams SET name=?, department_id=?, budget_cents=?, actual_cents=?, planned_headcount=?, planned_external_headcount=?, planned_internal_c=?, planned_external_c=?, updated_at=? WHERE id=?',
           )
-          .run(t.name, t.budgetCents, t.actualCents, ...hc(t), now(), id).changes,
+          .run(t.name, t.departmentId, t.budgetCents, t.actualCents, ...hc(t), now(), id).changes,
       ),
     deleteTeam: (id: number) => Number(db.prepare('DELETE FROM teams WHERE id=?').run(id).changes),
+
+    listDepartments: () =>
+      db.prepare('SELECT id, name, updated_at AS updatedAt FROM departments ORDER BY name').all() as Department[],
+    getDepartment: (id: number) =>
+      db.prepare('SELECT id, name, updated_at AS updatedAt FROM departments WHERE id = ?').get(id) as Department | undefined,
+    createDepartment: (d: DepartmentInput) =>
+      Number(db.prepare('INSERT INTO departments (name, updated_at) VALUES (?,?)').run(d.name, now()).lastInsertRowid),
+    updateDepartment: (id: number, d: DepartmentInput) =>
+      Number(db.prepare('UPDATE departments SET name=?, updated_at=? WHERE id=?').run(d.name, now(), id).changes),
+    deleteDepartment: (id: number) => Number(db.prepare('DELETE FROM departments WHERE id=?').run(id).changes),
 
     listConsultants: () => withShares(db.prepare(`${CONSULTANT_SELECT} ORDER BY code`).all() as Row[]),
     getConsultant: (id: number) =>
@@ -266,12 +330,13 @@ export function openDb(path: string) {
     createConsultant: (c: ConsultantInput) => tx(() => {
       const r = db
         .prepare(
-          `INSERT INTO consultants (code, team_id, profile, seniority, kind, cost_rate_cents_per_day,
-           supplier, contract_end, status, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO consultants (code, team_id, department_id, profile, seniority, kind, cost_rate_cents_per_day,
+           supplier, contract_end, status, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         )
         .run(
           c.code,
           c.teamId,
+          c.departmentId,
           c.profile,
           c.seniority,
           c.kind,
@@ -289,12 +354,13 @@ export function openDb(path: string) {
       const changes = Number(
         db
           .prepare(
-            `UPDATE consultants SET code=?, team_id=?, profile=?, seniority=?, kind=?, cost_rate_cents_per_day=?,
+            `UPDATE consultants SET code=?, team_id=?, department_id=?, profile=?, seniority=?, kind=?, cost_rate_cents_per_day=?,
              supplier=?, contract_end=?, status=?, updated_at=? WHERE id=?`,
           )
           .run(
             c.code,
             c.teamId,
+            c.departmentId,
             c.profile,
             c.seniority,
             c.kind,

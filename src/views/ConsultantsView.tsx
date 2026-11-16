@@ -1,15 +1,17 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { teamLabel } from '../home.ts';
 import { usePersistedState } from '../usePersistedState.ts';
-import { WORK_DAYS_PER_MONTH, WORK_MONTHS_PER_YEAR, CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Seniority, type Status, type Team } from '../../shared/types.ts';
+import { WORK_DAYS_PER_MONTH, WORK_MONTHS_PER_YEAR, CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Department, type Seniority, type Status, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatCents, parseEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
 import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 
-type Props = { teams: Team[]; consultants: Consultant[]; onChanged: () => Promise<void> };
+type Props = { teams: Team[]; departments: Department[]; consultants: Consultant[]; onChanged: () => Promise<void> };
 type Form = {
   code: string;
   teamId: string;
+  departmentId: string; // em vez de equipa: só para o manager (conta por todas as equipas do departamento)
   profile: string;
   seniority: Seniority;
   kind: ConsultantKind;
@@ -22,14 +24,14 @@ type Form = {
 type Errors = Partial<Record<keyof Form, string>>;
 
 const EMPTY: Form = {
-  code: '', teamId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', supplier: '', contractEnd: '', status: 'active', extra: [],
+  code: '', teamId: '', departmentId: '', profile: '', seniority: 'pleno', kind: 'external', cost: '', supplier: '', contractEnd: '', status: 'active', extra: [],
 };
 
 const SENIORITY_LABEL: Record<Seniority, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sénior', lead: 'Lead' };
 const KIND_LABEL: Record<ConsultantKind, string> = { internal: 'Interno', external: 'Externo' };
 const STATUS_LABEL: Record<Status, string> = { active: 'Ativo', inactive: 'Inativo' };
 
-export function ConsultantsView({ teams, consultants, onChanged }: Props) {
+export function ConsultantsView({ teams, departments, consultants, onChanged }: Props) {
   const [form, setForm] = usePersistedState<Form>('gu:consultores:form', EMPTY);
   const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:consultores:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
@@ -42,6 +44,12 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
 
   const set = (k: Exclude<keyof Form, 'extra'>) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // ---- Departamento (manager): não tem equipa principal nem outras equipas; conta por todas as equipas do departamento ----
+  const ofDept = form.departmentId !== '';
+  const deptTeams = teams.filter((t) => String(t.departmentId) === form.departmentId);
+  const chooseDept = (e: { target: { value: string } }) =>
+    setForm((f) => ({ ...f, departmentId: e.target.value, teamId: '', extra: [] }));
 
   // ---- Outras equipas (pessoa repartida): a equipa principal fica com o resto ----
   const extraSum = form.extra.reduce((a, x) => a + (Number.isInteger(Number(x.pct)) ? Number(x.pct) : 0), 0);
@@ -77,13 +85,17 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
     const costCents = external ? parseEuroToCents(form.cost) : 0;
     const supplier = external ? form.supplier.trim() : '';
     if (!/^[A-Za-z0-9_-]{1,20}$/.test(form.code.trim())) next.code = 'Usa um código (ex.: C001), sem espaços nem nomes reais.';
-    if (form.teamId === '') next.teamId = 'Escolhe uma equipa.';
-    const extraOk =
-      form.extra.every((x) => x.teamId !== '' && x.teamId !== form.teamId && /^\d{1,2}$/.test(x.pct) && Number(x.pct) >= 1) &&
-      new Set(form.extra.map((x) => x.teamId)).size === form.extra.length &&
-      extraSum <= 99;
-    if (!extraOk)
-      next.extra = 'Cada equipa adicional precisa de equipa (diferente da principal, sem repetir) e de 1 a 99 %; a soma tem de ficar abaixo de 100 %.';
+    if (ofDept) {
+      if (deptTeams.length === 0) next.departmentId = 'Este departamento ainda não tem equipas.';
+    } else {
+      if (form.teamId === '') next.teamId = 'Escolhe uma equipa ou um departamento.';
+      const extraOk =
+        form.extra.every((x) => x.teamId !== '' && x.teamId !== form.teamId && /^\d{1,2}$/.test(x.pct) && Number(x.pct) >= 1) &&
+        new Set(form.extra.map((x) => x.teamId)).size === form.extra.length &&
+        extraSum <= 99;
+      if (!extraOk)
+        next.extra = 'Cada equipa adicional precisa de equipa (diferente da principal, sem repetir) e de 1 a 99 %; a soma tem de ficar abaixo de 100 %.';
+    }
     if (form.profile.trim() === '') next.profile = 'Indica o perfil.';
     if (costCents === null) next.cost = 'Formato inválido. Exemplo: 450,00';
     else if (external && costCents === 0) next.cost = 'Um externo precisa de rate maior que zero.';
@@ -97,8 +109,9 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
       await api.saveConsultant(
         {
           code: form.code.trim(),
-          teamId: Number(form.teamId),
-          extraTeams: form.extra.map((x) => ({ teamId: Number(x.teamId), pct: Number(x.pct) })),
+          teamId: ofDept ? null : Number(form.teamId),
+          departmentId: ofDept ? Number(form.departmentId) : null,
+          extraTeams: ofDept ? [] : form.extra.map((x) => ({ teamId: Number(x.teamId), pct: Number(x.pct) })),
           profile: form.profile.trim(),
           seniority: form.seniority,
           kind: form.kind,
@@ -124,7 +137,8 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
     setFormError(undefined);
     setForm({
       code: c.code,
-      teamId: String(c.teamId),
+      teamId: c.teamId === null ? '' : String(c.teamId),
+      departmentId: c.departmentId === null ? '' : String(c.departmentId),
       profile: c.profile,
       seniority: c.seniority,
       kind: c.kind,
@@ -152,16 +166,32 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
           <Field label="Código (pseudónimo)" hint="Ex.: C001. Não uses nomes reais." error={errors.code}>
             {(c) => <input {...c} name="code" type="text" autoComplete="off" value={form.code} onChange={set('code')} />}
           </Field>
-          <Field label="Equipa principal" hint="Onde contam skills e objetivos" error={errors.teamId}>
+          <Field
+            label="Departamento"
+            hint="Só para o manager: conta por igual em todas as equipas do departamento. Deixa vazio para uma equipa."
+            error={errors.departmentId}
+          >
             {(c) => (
-              <select {...c} name="team" value={form.teamId} onChange={set('teamId')}>
-                <option value="">Escolher…</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+              <select {...c} name="department" value={form.departmentId} onChange={chooseDept}>
+                <option value="">Nenhum (pessoa de equipa)</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
             )}
           </Field>
+          {!ofDept && (
+            <Field label="Equipa principal" hint="Onde contam skills e objetivos" error={errors.teamId}>
+              {(c) => (
+                <select {...c} name="team" value={form.teamId} onChange={set('teamId')}>
+                  <option value="">Escolher…</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          )}
           <Field label="Perfil" hint="Ex.: Data Engineer" error={errors.profile}>
             {(c) => <input {...c} name="profile" type="text" autoComplete="off" value={form.profile} onChange={set('profile')} />}
           </Field>
@@ -208,6 +238,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
               </select>
             )}
           </Field>
+          {!ofDept && (
           <fieldset className="shares">
             <legend>Outras equipas (opcional)</legend>
             <p className="hint">
@@ -244,6 +275,7 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
               </button>
             </div>
           </fieldset>
+          )}
           <div className="actions">
             <button type="submit" className="primary" disabled={saving}>
               {saving ? 'A guardar…' : editingId === undefined ? 'Adicionar consultor' : 'Guardar alterações'}
@@ -281,7 +313,9 @@ export function ConsultantsView({ teams, consultants, onChanged }: Props) {
                 <tr key={c.id} className={c.status === 'inactive' ? 'muted' : undefined}>
                   <th scope="row">{c.code}</th>
                   <td>
-                    {teamName.get(c.teamId) ?? '—'}
+                    {c.teamId !== null
+                      ? teamLabel(c, teamName)
+                      : `Departamento ${departments.find((d) => d.id === c.departmentId)?.name ?? '—'}`}
                     {c.extraTeams.length > 0 && (
                       <>
                         {' '}{100 - c.extraTeams.reduce((a, x) => a + x.pct, 0)} %

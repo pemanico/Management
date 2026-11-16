@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { teamLabel } from '../home.ts';
 import { usePersistedState } from '../usePersistedState.ts';
 import {
   EVALUATION_STATUSES,
@@ -154,7 +155,7 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
               return (
                 <tr key={c.id}>
                   <th scope="row">{c.code}</th>
-                  <td>{teamName.get(c.teamId) ?? '—'}</td>
+                  <td>{teamLabel(c, teamName)}</td>
                   <td className="num">{mine.filter((o) => o.status === 'achieved').length} / {mine.length}</td>
                   <td>{ev ? STATUS_LABEL[ev.status] : <span className="flag">▲ por fazer</span>}</td>
                   <td className="row-actions">
@@ -176,7 +177,7 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
           {(c) => (
             <select {...c} name="consultant" value={form.consultantId} disabled={editingId !== undefined} onChange={(e) => set('consultantId', e.target.value)}>
               <option value="">Escolher…</option>
-              {active.map((p) => <option key={p.id} value={p.id}>{p.code} ({teamName.get(p.teamId) ?? '—'})</option>)}
+              {active.map((p) => <option key={p.id} value={p.id}>{p.code} ({teamLabel(p, teamName)})</option>)}
             </select>
           )}
         </Field>

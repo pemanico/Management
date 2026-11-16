@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { teamLabel } from '../home.ts';
 import { usePersistedState } from '../usePersistedState.ts';
 import {
   OBJECTIVE_STATUSES,
@@ -140,7 +141,7 @@ export function ObjectivesView({ teams, consultants, objectives, periodFilter, o
               </optgroup>
               <optgroup label="Consultor">
                 {consultants.filter((p) => p.status === 'active').map((p) => (
-                  <option key={`c${p.id}`} value={`c:${p.id}`}>{p.code} ({teamName.get(p.teamId) ?? '—'})</option>
+                  <option key={`c${p.id}`} value={`c:${p.id}`}>{p.code} ({teamLabel(p, teamName)})</option>
                 ))}
               </optgroup>
             </select>

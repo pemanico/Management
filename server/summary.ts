@@ -4,6 +4,7 @@ import type {
   Alert,
   Allocation,
   Consultant,
+  Department,
   SupplierSummary,
   ConsultantAllocation,
   Evaluation,
@@ -40,11 +41,35 @@ function pct(bp: number): string {
 const fte = (allocatedPct: number) => (allocatedPct / 100).toFixed(1).replace('.', ',');
 // Headcount em centésimos -> texto pt (2,5; 0,25; 3)
 const hcText = (c: number) => String(c / 100).replace('.', ',');
-/** Fração (0–100) de uma pessoa numa equipa: a principal fica com o resto das outras. */
-const shareIn = (c: Consultant, teamId: number): number =>
-  c.teamId === teamId
-    ? 100 - c.extraTeams.reduce((a, x) => a + x.pct, 0)
-    : (c.extraTeams.find((x) => x.teamId === teamId)?.pct ?? 0);
+/**
+ * Fração (0–100) de cada pessoa em cada equipa, por pessoa: { consultantId -> { teamId -> pct } }.
+ * - Com equipa principal: a principal fica com o resto (100 − soma das outras).
+ * - Com departamento (manager): reparte por igual por todas as equipas do departamento;
+ *   a sobra da divisão (ex.: 100 / 3) vai para as primeiras equipas por ordem de id, para somar sempre 100.
+ */
+function sharesOf(teams: Team[], consultants: Consultant[]): Map<number, Map<number, number>> {
+  const teamsByDept = new Map<number, number[]>();
+  for (const t of [...teams].sort((a, b) => a.id - b.id)) {
+    if (t.departmentId === null) continue;
+    teamsByDept.set(t.departmentId, [...(teamsByDept.get(t.departmentId) ?? []), t.id]);
+  }
+  const out = new Map<number, Map<number, number>>();
+  for (const c of consultants) {
+    const m = new Map<number, number>();
+    if (c.teamId !== null) {
+      m.set(c.teamId, 100 - c.extraTeams.reduce((a, x) => a + x.pct, 0));
+      for (const x of c.extraTeams) m.set(x.teamId, x.pct);
+    } else if (c.departmentId !== null) {
+      const ids = teamsByDept.get(c.departmentId) ?? [];
+      const n = Math.max(ids.length, 1);
+      const base = Math.floor(100 / n);
+      const rest = 100 % n;
+      ids.forEach((id, i) => m.set(id, base + (i < rest ? 1 : 0)));
+    }
+    out.set(c.id, m);
+  }
+  return out;
+}
 // Soma headcounts fracionários em centésimos inteiros (evita 0.1 + 0.2).
 const sumHc = (xs: number[]) => xs.reduce((a, x) => a + Math.round(x * 100), 0) / 100;
 const isOpenProject = (p: Project) => p.status !== 'done';
@@ -62,6 +87,7 @@ export function buildSummary(
   objectives: Objective[],
   evaluations: Evaluation[],
   now = new Date(),
+  departments: Department[] = [],
 ): Summary {
   const today = businessDate(now);
   const limit = businessDate(new Date(now.getTime() + EXPIRY_DAYS * DAY_MS));
@@ -72,6 +98,15 @@ export function buildSummary(
   const month = Number(today.slice(5, 7));
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
+  const deptById = new Map(departments.map((d) => [d.id, d]));
+  // Nome da "casa" da pessoa: equipa principal ou, no caso de departamento, o próprio departamento.
+  const homeName = (c: Consultant): string =>
+    c.teamId !== null
+      ? (teamById.get(c.teamId)?.name ?? '—')
+      : c.departmentId !== null
+        ? `Departamento ${deptById.get(c.departmentId)?.name ?? '—'}`
+        : '—';
+  const shares = sharesOf(teams, consultants);
   const skillById = new Map(skills.map((k) => [k.id, k]));
   const ratingKey = (c: number, k: number) => `${c}:${k}`;
   const ratingMap = new Map(ratings.map((r) => [ratingKey(r.consultantId, r.skillId), r]));
@@ -99,7 +134,7 @@ export function buildSummary(
     // Headcount e custo por fração (centésimos de FTE): inclui partes de pessoas cuja equipa principal é outra.
     const sharers = consultants
       .filter((c) => c.status === 'active')
-      .map((c) => ({ c, pct: shareIn(c, t.id) }))
+      .map((c) => ({ c, pct: shares.get(c.id)?.get(t.id) ?? 0 }))
       .filter((x) => x.pct > 0);
     const internalC = sharers.filter((x) => x.c.kind === 'internal').reduce((a, x) => a + x.pct, 0);
     const externalC = sharers.filter((x) => x.c.kind === 'external').reduce((a, x) => a + x.pct, 0);
@@ -264,7 +299,7 @@ export function buildSummary(
   // ---- Objetivos (ano corrente) e avaliações: só agregados saem daqui ----
   const activeIds = new Set(consultants.filter((c) => c.status === 'active').map((c) => c.id));
   const teamOfObjective = (o: Objective): number | undefined =>
-    o.teamId ?? (o.consultantId !== null ? personById.get(o.consultantId)?.teamId : undefined);
+    o.teamId ?? (o.consultantId !== null ? (personById.get(o.consultantId)?.teamId ?? undefined) : undefined);
   const yearObjectives = objectives.filter(
     (o) => o.period.startsWith(year) && (o.consultantId === null || activeIds.has(o.consultantId)),
   );
@@ -320,7 +355,7 @@ export function buildSummary(
     const c = personById.get(tr.consultantId);
     alerts.push({
       type: 'training_overdue',
-      scope: `${c ? (teamById.get(c.teamId)?.name ?? '—') : '—'} / ${c?.code ?? '—'}`,
+      scope: `${c ? homeName(c) : '—'} / ${c?.code ?? '—'}`,
       message: `Formação "${tr.title}" com data limite ${tr.dueDate} ultrapassada.`,
     });
   }
@@ -363,7 +398,7 @@ export function buildSummary(
     .filter((c) => c.status === 'active')
     .map((c) => ({
       code: c.code,
-      teamName: teamById.get(c.teamId)?.name ?? '—',
+      teamName: homeName(c),
       allocatedPct: pctByConsultant.get(c.id)?.pct ?? 0,
       projectCount: pctByConsultant.get(c.id)?.projects ?? 0,
     }));
@@ -389,7 +424,7 @@ export function buildSummary(
       monthlyCostCents: people.reduce((a, c) => a + c.costRateCentsPerDay, 0) * WORK_DAYS_PER_MONTH,
       annualCostCents: people.reduce((a, c) => a + c.costRateCentsPerDay, 0) * WORK_DAYS_PER_MONTH * WORK_MONTHS_PER_YEAR,
       contractsExpiring90d: people.filter((c) => c.contractEnd !== null && c.contractEnd >= today && c.contractEnd <= limit).length,
-      teams: [...new Set(people.map((c) => teamById.get(c.teamId)?.name ?? '—'))].sort(),
+      teams: [...new Set(people.map((c) => homeName(c)))].sort(),
     }))
     .sort((a, b) => b.activeHeadcount - a.activeHeadcount || a.supplier.localeCompare(b.supplier, 'pt-PT'));
   return {
@@ -401,7 +436,7 @@ export function buildSummary(
       plannedHeadcount: sumHc(teams.map((t) => t.plannedHeadcount)),
       // Totais contam pessoas (cada uma soma 100 % entre as suas equipas): sem erros de arredondamento.
       activeHeadcount: activePeople.length,
-      sharedPeople: activePeople.filter((c) => c.extraTeams.length > 0).length,
+      sharedPeople: activePeople.filter((c) => (shares.get(c.id)?.size ?? 0) > 1).length,
       internalHeadcount: activePeople.length - activeExternals.length,
       externalHeadcount: activeExternals.length,
       plannedInternalHeadcount: sumHc(teams.map((t) => t.plannedInternalHeadcount)),

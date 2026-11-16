@@ -26,6 +26,7 @@ import {
   type Status,
   type AllocationInput,
   type TeamInput,
+  type DepartmentInput,
   type TrainingInput,
   type TrainingKind,
   type TrainingStatus,
@@ -74,7 +75,22 @@ export function parseTeam(body: unknown): Result<TeamInput> {
   if (actualCents === null) return { ok: false, error: 'Gasto real inválido.' };
   if (plannedInternalHeadcount === null) return { ok: false, error: 'Headcount orçamentado de internos inválido.' };
   if (plannedExternalHeadcount === null) return { ok: false, error: 'Headcount orçamentado de externos inválido.' };
-  return { ok: true, value: { name, budgetCents, actualCents, plannedInternalHeadcount, plannedExternalHeadcount } };
+  const departmentId = isBlank(body.departmentId) ? null : intIn(body.departmentId, 1, Number.MAX_SAFE_INTEGER);
+  if (departmentId === null && !isBlank(body.departmentId)) return { ok: false, error: 'Departamento inválido.' };
+  return {
+    ok: true,
+    value: { name, departmentId, budgetCents, actualCents, plannedInternalHeadcount, plannedExternalHeadcount },
+  };
+}
+
+// Campo opcional vazio: null, undefined ou string vazia.
+const isBlank = (v: unknown) => v === null || v === undefined || v === '';
+
+export function parseDepartment(body: unknown): Result<DepartmentInput> {
+  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  const name = text(body.name, 80);
+  if (name === null) return { ok: false, error: 'Nome do departamento inválido (1–80 caracteres).' };
+  return { ok: true, value: { name } };
 }
 
 export function parseConsultant(body: unknown): Result<ConsultantInput> {
@@ -82,8 +98,20 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
   const code = typeof body.code === 'string' ? body.code.trim() : '';
   if (!/^[A-Za-z0-9_-]{1,20}$/.test(code))
     return { ok: false, error: 'Código inválido: usa um código (ex.: C001), 1–20 caracteres, sem espaços.' };
-  const teamId = intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER);
-  if (teamId === null) return { ok: false, error: 'Equipa inválida.' };
+  // Ou equipa (e outras equipas em fração) ou departamento (manager): nunca os dois.
+  const ofDepartment = !isBlank(body.departmentId);
+  let teamId: number | null = null;
+  let departmentId: number | null = null;
+  if (ofDepartment) {
+    departmentId = intIn(body.departmentId, 1, Number.MAX_SAFE_INTEGER);
+    if (departmentId === null) return { ok: false, error: 'Departamento inválido.' };
+    if (!isBlank(body.teamId)) return { ok: false, error: 'Escolhe equipa ou departamento, não os dois.' };
+    if (Array.isArray(body.extraTeams) && body.extraTeams.length > 0)
+      return { ok: false, error: 'Quem está num departamento conta por todas as equipas dele: não tem outras equipas.' };
+  } else {
+    teamId = intIn(body.teamId, 1, Number.MAX_SAFE_INTEGER);
+    if (teamId === null) return { ok: false, error: 'Escolhe uma equipa ou um departamento.' };
+  }
   const profile = text(body.profile, 60);
   if (profile === null) return { ok: false, error: 'Perfil inválido (1–60 caracteres).' };
   if (!SENIORITIES.includes(body.seniority as Seniority))
@@ -131,6 +159,7 @@ export function parseConsultant(body: unknown): Result<ConsultantInput> {
     value: {
       code,
       teamId,
+      departmentId,
       extraTeams,
       profile,
       seniority: body.seniority as Seniority,

@@ -13,8 +13,13 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const PRIORITIES = ['low', 'medium', 'high'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
+export type DepartmentInput = { name: string };
+// Departamento: agrupa equipas. Só o manager (e outros papéis de direção) fica ligado ao departamento.
+export type Department = DepartmentInput & { id: number; updatedAt: string };
+
 export type TeamInput = {
   name: string;
+  departmentId: number | null; // departamento a que a equipa pertence (opcional)
   budgetCents: number;
   actualCents: number;
   // Budget em pessoas (FTE). Aceita frações até 2 casas (ex.: 2.5), porque há pessoas repartidas por equipas.
@@ -37,8 +42,12 @@ export type TeamShare = { teamId: number; pct: number };
 
 export type ConsultantInput = {
   code: string; // código pseudónimo (ex.: C001), nunca o nome real
-  teamId: number; // equipa principal: fica com o resto (100 - soma das outras) e é onde contam skills e objetivos
-  extraTeams: TeamShare[]; // outras equipas onde a pessoa está repartida (headcount e custo em fração)
+  // Ou equipa(s) ou departamento, nunca os dois:
+  // - com equipa: equipa principal (fica com o resto, 100 - soma das outras) e é onde contam skills e objetivos;
+  // - com departamento (ex.: manager): conta em partes iguais por todas as equipas do departamento, sem equipa principal.
+  teamId: number | null;
+  departmentId: number | null;
+  extraTeams: TeamShare[]; // outras equipas onde a pessoa está repartida (headcount e custo em fração); vazio se for de departamento
   profile: string;
   seniority: Seniority;
   kind: ConsultantKind; // interno (sem rate nem salário registados) ou externo (com rate)

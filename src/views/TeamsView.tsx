@@ -1,24 +1,30 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { usePersistedState } from '../usePersistedState.ts';
-import type { Team } from '../../shared/types.ts';
+import type { Department, Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatHc, formatOptionalCents, parseHc, parseOptionalEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
 import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 
-type Props = { teams: Team[]; onChanged: () => Promise<void> };
-type Form = { name: string; budget: string; actual: string; plannedInt: string; plannedExt: string };
+type Props = { teams: Team[]; departments: Department[]; onChanged: () => Promise<void> };
+type Form = { name: string; departmentId: string; budget: string; actual: string; plannedInt: string; plannedExt: string };
 type Errors = Partial<Record<keyof Form, string>>;
 
-const EMPTY: Form = { name: '', budget: '', actual: '', plannedInt: '0', plannedExt: '0' };
+const EMPTY: Form = { name: '', departmentId: '', budget: '', actual: '', plannedInt: '0', plannedExt: '0' };
 
-export function TeamsView({ teams, onChanged }: Props) {
+export function TeamsView({ teams, departments, onChanged }: Props) {
   const [form, setForm] = usePersistedState<Form>('gu:equipas:form', EMPTY);
   const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:equipas:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
+  const deptName = new Map(departments.map((d) => [d.id, d.name]));
+
+  // Departamentos: criar e apagar (renomear fica para depois).
+  const [deptDraft, setDeptDraft] = useState('');
+  const [deptError, setDeptError] = useState<string | undefined>();
+  const deptErrorRef = useRef<HTMLParagraphElement>(null);
 
   const set = (k: keyof Form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -52,7 +58,14 @@ export function TeamsView({ teams, onChanged }: Props) {
     setSaving(true);
     try {
       await api.saveTeam(
-        { name: form.name.trim(), budgetCents, actualCents, plannedInternalHeadcount: plannedInt, plannedExternalHeadcount: plannedExt },
+        {
+          name: form.name.trim(),
+          departmentId: form.departmentId === '' ? null : Number(form.departmentId),
+          budgetCents,
+          actualCents,
+          plannedInternalHeadcount: plannedInt,
+          plannedExternalHeadcount: plannedExt,
+        },
         editingId,
       );
       await onChanged();
@@ -71,11 +84,31 @@ export function TeamsView({ teams, onChanged }: Props) {
     setFormError(undefined);
     setForm({
       name: t.name,
+      departmentId: t.departmentId === null ? '' : String(t.departmentId),
       budget: centsToInput(t.budgetCents),
       actual: centsToInput(t.actualCents),
       plannedInt: formatHc(t.plannedInternalHeadcount),
       plannedExt: formatHc(t.plannedExternalHeadcount),
     });
+  }
+
+  async function addDepartment(e: FormEvent) {
+    e.preventDefault();
+    const name = deptDraft.trim();
+    if (name === '') {
+      setDeptError('Indica o nome do departamento.');
+      queueMicrotask(() => deptErrorRef.current?.focus());
+      return;
+    }
+    try {
+      await api.saveDepartment({ name });
+      setDeptDraft('');
+      setDeptError(undefined);
+      await onChanged();
+    } catch (err) {
+      setDeptError(err instanceof ApiError ? err.message : 'Ocorreu um erro. Tenta novamente.');
+      queueMicrotask(() => deptErrorRef.current?.focus());
+    }
   }
 
   return (
@@ -90,6 +123,16 @@ export function TeamsView({ teams, onChanged }: Props) {
         )}
         <Field label="Nome" error={errors.name}>
           {(c) => <input {...c} name="name" type="text" autoComplete="off" value={form.name} onChange={set('name')} />}
+        </Field>
+        <Field label="Departamento" hint="Opcional. Agrupa equipas (ex.: Direção Dados)." error={errors.departmentId}>
+          {(c) => (
+            <select {...c} name="department" value={form.departmentId} onChange={set('departmentId')}>
+              <option value="">Sem departamento</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          )}
         </Field>
         <Field label="Budget em dinheiro (EUR)" hint="Opcional. Deixa vazio se o teu budget é só em headcount." error={errors.budget}>
           {(c) => <input {...c} name="budget" type="text" inputMode="decimal" autoComplete="off" value={form.budget} onChange={set('budget')} />}
@@ -124,6 +167,7 @@ export function TeamsView({ teams, onChanged }: Props) {
             <thead>
               <tr>
                 <th scope="col">Equipa</th>
+                <th scope="col">Departamento</th>
                 <th scope="col" className="num">HC orçamentado: internos</th>
                 <th scope="col" className="num">HC orçamentado: externos</th>
                 <th scope="col" className="num">Total</th>
@@ -137,6 +181,7 @@ export function TeamsView({ teams, onChanged }: Props) {
               {teams.map((t) => (
                 <tr key={t.id}>
                   <th scope="row">{t.name}</th>
+                  <td>{t.departmentId === null ? '—' : (deptName.get(t.departmentId) ?? '—')}</td>
                   <td className="num">{formatHc(t.plannedInternalHeadcount)}</td>
                   <td className="num">{formatHc(t.plannedExternalHeadcount)}</td>
                   <td className="num">{formatHc(t.plannedHeadcount)}</td>
@@ -165,6 +210,42 @@ export function TeamsView({ teams, onChanged }: Props) {
             </tbody>
           </table>
         </div>
+      )}
+
+      <h3>Departamentos</h3>
+      <form onSubmit={addDepartment} noValidate className="card form-grid">
+        {deptError && (
+          <p ref={deptErrorRef} tabIndex={-1} role="alert" className="error banner">
+            {deptError}
+          </p>
+        )}
+        <Field label="Nome do departamento" hint="Ex.: Direção Dados">
+          {(c) => <input {...c} name="deptName" type="text" autoComplete="off" value={deptDraft} onChange={(e) => setDeptDraft(e.target.value)} />}
+        </Field>
+        <div className="actions">
+          <button type="submit" className="primary">Adicionar departamento</button>
+        </div>
+      </form>
+      {departments.length > 0 && (
+        <ul className="plain-list">
+          {departments.map((d) => (
+            <li key={d.id}>
+              {d.name}{' '}
+              <ConfirmDelete
+                label={d.name}
+                onConfirm={async () => {
+                  try {
+                    await api.deleteDepartment(d.id);
+                    await onChanged();
+                  } catch (err) {
+                    setDeptError(err instanceof ApiError ? err.message : 'Ocorreu um erro.');
+                    queueMicrotask(() => deptErrorRef.current?.focus());
+                  }
+                }}
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

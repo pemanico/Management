@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { teamLabel } from '../home.ts';
 import { usePersistedState } from '../usePersistedState.ts';
 import {
   SKILL_LEVEL_LABEL,
@@ -267,7 +268,7 @@ export function TrainingView({ teams, consultants, skills, ratings, requirements
             <select {...c} name="consultant" value={form.consultantId} onChange={(e) => set('consultantId', e.target.value)}>
               <option value="">Escolher…</option>
               {active.map((p) => (
-                <option key={p.id} value={p.id}>{p.code} ({teamName.get(p.teamId) ?? '—'})</option>
+                <option key={p.id} value={p.id}>{p.code} ({teamLabel(p, teamName)})</option>
               ))}
             </select>
           )}

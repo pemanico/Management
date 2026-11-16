@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { teamLabel } from '../home.ts';
 import type { Allocation, Consultant, Project, Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { Field } from '../components/Field.tsx';
@@ -88,7 +89,7 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
             <select {...c} name="project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
               <option value="">Escolher…</option>
               {openProjects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} ({teamName.get(p.teamId) ?? '—'})</option>
+                <option key={p.id} value={p.id}>{p.name} ({teamLabel(p, teamName)})</option>
               ))}
             </select>
           )}
@@ -98,7 +99,7 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
             <select {...c} name="consultant" value={consultantId} onChange={(e) => setConsultantId(e.target.value)}>
               <option value="">Escolher…</option>
               {active.map((p) => (
-                <option key={p.id} value={p.id}>{p.code} ({teamName.get(p.teamId) ?? '—'})</option>
+                <option key={p.id} value={p.id}>{p.code} ({teamLabel(p, teamName)})</option>
               ))}
             </select>
           )}
@@ -147,7 +148,7 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
                   <tr key={`${a.projectId}-${a.consultantId}`} className={p?.status === 'done' ? 'muted' : undefined}>
                     <th scope="row">{p?.name ?? '—'}</th>
                     <td>{c?.code ?? '—'}</td>
-                    <td>{c ? (teamName.get(c.teamId) ?? '—') : '—'}</td>
+                    <td>{c ? (teamLabel(c, teamName)) : '—'}</td>
                     <td className="num">{a.allocationPct}&nbsp;%</td>
                     <td className="row-actions">
                       <button
@@ -203,7 +204,7 @@ export function AllocationsView({ teams, projects, consultants, allocations, pro
               return (
                 <tr key={c.id}>
                   <th scope="row">{c.code}</th>
-                  <td>{teamName.get(c.teamId) ?? '—'}</td>
+                  <td>{teamLabel(c, teamName)}</td>
                   <td className="num">{t.projects}</td>
                   <td className="num">{t.pct}&nbsp;% ({fte(t.pct)}&nbsp;FTE)</td>
                   <td>
