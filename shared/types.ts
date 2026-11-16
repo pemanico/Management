@@ -13,6 +13,18 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const PRIORITIES = ['low', 'medium', 'high'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
+// Perfis: lista única (combo) de perfis profissionais; o consultor escolhe um da lista.
+export type ProfileInput = { name: string };
+export type Profile = ProfileInput & { id: number; updatedAt: string };
+export const DEFAULT_PROFILES = [
+  'Big Data Trainee',
+  'Big Data Júnior',
+  'Big Data Pleno',
+  'Big Data Sénior',
+  'Big Data Lead',
+  'Big Data Manager',
+] as const;
+
 export type DepartmentInput = { name: string };
 // Departamento: agrupa equipas. Só o manager (e outros papéis de direção) fica ligado ao departamento.
 export type Department = DepartmentInput & { id: number; updatedAt: string };

@@ -27,6 +27,7 @@ import {
   type AllocationInput,
   type TeamInput,
   type DepartmentInput,
+  type ProfileInput,
   type TrainingInput,
   type TrainingKind,
   type TrainingStatus,
@@ -85,6 +86,13 @@ export function parseTeam(body: unknown): Result<TeamInput> {
 
 // Campo opcional vazio: null, undefined ou string vazia.
 const isBlank = (v: unknown) => v === null || v === undefined || v === '';
+
+export function parseProfile(body: unknown): Result<ProfileInput> {
+  if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };
+  const name = text(body.name, 60);
+  if (name === null) return { ok: false, error: 'Nome do perfil inválido (1–60 caracteres).' };
+  return { ok: true, value: { name } };
+}
 
 export function parseDepartment(body: unknown): Result<DepartmentInput> {
   if (!isRecord(body)) return { ok: false, error: 'Pedido inválido.' };

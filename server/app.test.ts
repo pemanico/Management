@@ -9,6 +9,8 @@ import type { ConsultantInput } from '../shared/types.ts';
 
 async function setup() {
   const db = openDb(':memory:');
+  // Perfis usados nos testes (a lista é obrigatória para os consultores).
+  for (const name of ['Data Engineer', 'QA', 'x', 'Manager']) db.createProfile({ name });
   const server = createApp(db);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -523,5 +525,56 @@ test('migração: base com consultores de team_id obrigatório é recriada sem p
   assert.throws(() => db.createConsultant({ ...base, code: 'M3', teamId: 1, departmentId: d }));
   // as chaves estrangeiras continuam ativas depois da migração
   assert.throws(() => db.createConsultant({ ...base, code: 'M4', teamId: 999, departmentId: null }));
+  db.close();
+});
+
+test('perfis: lista única, consultores só escolhem da lista, renomear propaga, apagar só se não estiver em uso', async () => {
+  const { call, close } = await setup();
+  try {
+    const profiles = (await call('/api/profiles')).data as any[];
+    assert.ok(profiles.some((p) => p.name === 'Big Data Trainee'));
+    assert.ok(profiles.some((p) => p.name === 'Big Data Manager'));
+    const pleno = profiles.find((p) => p.name === 'Big Data Pleno');
+    const t = ((await call('/api/teams', 'POST', { name: 'T', budgetCents: 0, actualCents: 0, plannedInternalHeadcount: 0, plannedExternalHeadcount: 0 })).data as any).id;
+    const base = { teamId: t, extraTeams: [], seniority: 'pleno', kind: 'internal', supplier: null, costRateCentsPerDay: 0, contractEnd: null, status: 'active' };
+    // perfil fora da lista é recusado; de dentro da lista é aceite
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'C1', profile: 'Engenheiro qualquer' })).status, 400);
+    assert.equal((await call('/api/consultants', 'POST', { ...base, code: 'C1', profile: 'Big Data Pleno' })).status, 201);
+    // renomear o perfil atualiza quem o usa
+    assert.equal((await call(`/api/profiles/${pleno.id}`, 'PUT', { name: 'Big Data Pleno Sénior' })).status, 200);
+    assert.equal(((await call('/api/consultants')).data as any[])[0].profile, 'Big Data Pleno Sénior');
+    // não se apaga um perfil em uso
+    const renamed = ((await call('/api/profiles')).data as any[]).find((p) => p.name === 'Big Data Pleno Sénior');
+    assert.equal((await call(`/api/profiles/${renamed.id}`, 'DELETE')).status, 409);
+    const trainee = profiles.find((p) => p.name === 'Big Data Trainee');
+    assert.equal((await call(`/api/profiles/${trainee.id}`, 'DELETE')).status, 200);
+    // nomes repetidos são recusados
+    assert.equal((await call('/api/profiles', 'POST', { name: 'Big Data Manager' })).status, 409);
+  } finally {
+    close();
+  }
+});
+
+test('migração: perfis em texto livre passam a constar da lista (nada fica inválido)', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const path = join(mkdtempSync(join(tmpdir(), 'um-')), 'old-profiles.sqlite');
+  const old = new DatabaseSync(path);
+  old.exec(`CREATE TABLE teams (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, budget_cents INTEGER NOT NULL,
+    actual_cents INTEGER NOT NULL, planned_headcount INTEGER NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE consultants (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, team_id INTEGER NOT NULL REFERENCES teams(id),
+    profile TEXT NOT NULL, seniority TEXT NOT NULL, cost_rate_cents_per_day INTEGER NOT NULL, bill_rate_cents_per_day INTEGER,
+    contract_end TEXT, status TEXT NOT NULL, updated_at TEXT NOT NULL);
+    INSERT INTO teams VALUES (1,'A',0,0,0,'2026-01-01T00:00:00Z');
+    INSERT INTO consultants (id, code, team_id, profile, seniority, cost_rate_cents_per_day, status, updated_at)
+      VALUES (1,'C001',1,'Data Engineer','pleno',0,'active','2026-01-01T00:00:00Z');`);
+  old.close();
+  const db = openDb(path);
+  const names = db.listProfiles().map((p) => p.name);
+  assert.ok(names.includes('Data Engineer'));
+  assert.ok(names.includes('Big Data Manager'));
+  assert.equal(db.getConsultant(1)!.profile, 'Data Engineer');
   db.close();
 });

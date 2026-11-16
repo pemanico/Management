@@ -6,6 +6,7 @@ import {
   parseAllocation,
   parseConsultant,
   parseDepartment,
+  parseProfile,
   parseEvaluation,
   parseObjective,
   parseProject,
@@ -241,6 +242,43 @@ export function createApp(db: Db): Server {
         throw new HttpError(400, 'kind inválido.');
       }
 
+      if (resource === 'profiles') {
+        if (!idPart && method === 'GET') return send(res, 200, db.listProfiles());
+        if (!idPart && method === 'POST') {
+          const p = parseProfile(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          try {
+            return send(res, 201, db.getProfile(db.createProfile(p.value)));
+          } catch (e) {
+            if (isConstraint(e)) throw new HttpError(409, 'Já existe um perfil com esse nome.');
+            throw e;
+          }
+        }
+        if (idPart && method === 'PUT') {
+          const id = parseId(idPart);
+          const p = parseProfile(await readJson(req));
+          if (!p.ok) throw new HttpError(400, p.error);
+          const current = db.getProfile(id);
+          if (!current) throw new HttpError(404, 'Perfil não encontrado.');
+          try {
+            db.renameProfile(id, p.value);
+          } catch (e) {
+            if (isConstraint(e)) throw new HttpError(409, 'Já existe um perfil com esse nome.');
+            throw e;
+          }
+          return send(res, 200, db.getProfile(id));
+        }
+        if (idPart && method === 'DELETE') {
+          const id = parseId(idPart);
+          const current = db.getProfile(id);
+          if (!current) throw new HttpError(404, 'Perfil não encontrado.');
+          if (db.profileInUse(current.name))
+            throw new HttpError(409, 'Há consultores com este perfil; muda-os para outro perfil primeiro.');
+          db.deleteProfile(id);
+          return send(res, 200, { ok: true });
+        }
+      }
+
       if (resource === 'departments') {
         if (!idPart && method === 'GET') return send(res, 200, db.listDepartments());
         if (!idPart && method === 'POST') {
@@ -277,6 +315,12 @@ export function createApp(db: Db): Server {
           return send(res, 200, { ok: true });
         }
       }
+
+      // Perfil tem de vir da lista (página Perfis): todos com o mesmo nome, sem variantes escritas à mão.
+      const checkProfile = (name: string) => {
+        if (!db.listProfiles().some((p) => p.name === name))
+          throw new HttpError(400, 'Perfil fora da lista: escolhe um perfil da lista ou cria-o na página Perfis.');
+      };
 
       // Departamento tem de existir e ter pelo menos uma equipa (senão a pessoa não conta em nenhuma).
       const checkDepartment = (departmentId: number | null, needsTeams: boolean) => {
@@ -333,6 +377,7 @@ export function createApp(db: Db): Server {
           const p = parseConsultant(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           checkDepartment(p.value.departmentId, true);
+          checkProfile(p.value.profile);
           try {
             return send(res, 201, db.getConsultant(db.createConsultant(p.value)));
           } catch (e) {
@@ -344,6 +389,7 @@ export function createApp(db: Db): Server {
           const p = parseConsultant(await readJson(req));
           if (!p.ok) throw new HttpError(400, p.error);
           checkDepartment(p.value.departmentId, true);
+          checkProfile(p.value.profile);
           try {
             if (db.updateConsultant(id, p.value) === 0)
               throw new HttpError(404, 'Consultor não encontrado.');

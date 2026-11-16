@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { DEFAULT_PROFILES, type Profile, type ProfileInput } from '../shared/types.ts';
 import type {
   Allocation,
   Evaluation,
@@ -25,6 +26,11 @@ import type {
 } from '../shared/types.ts';
 
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS departments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
@@ -186,7 +192,16 @@ const CONSULTANT_SELECT = `SELECT id, code, team_id AS teamId, department_id AS 
 export function openDb(path: string) {
   const db = new DatabaseSync(path);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  const hadProfiles = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='profiles'").get() !== undefined;
   db.exec(SCHEMA);
+  // Perfis: na primeira vez, semeia a lista base e acrescenta os perfis que já existiam em texto livre (nada fica inválido).
+  if (!hadProfiles) {
+    const ts = new Date().toISOString();
+    const ins = db.prepare('INSERT OR IGNORE INTO profiles (name, updated_at) VALUES (?, ?)');
+    for (const name of DEFAULT_PROFILES) ins.run(name, ts);
+    db.exec(`INSERT OR IGNORE INTO profiles (name, updated_at)
+      SELECT DISTINCT profile, '${ts}' FROM consultants WHERE profile IS NOT NULL AND profile <> ''`);
+  }
   // Migração: bases criadas antes de existirem prioridade e HC por projeto.
   // Bases antigas: todos os consultores tinham rate, por isso passam a 'external'.
   const consultantCols = (db.prepare('PRAGMA table_info(consultants)').all() as { name: string }[]).map((c) => c.name);
@@ -323,6 +338,24 @@ export function openDb(path: string) {
     updateDepartment: (id: number, d: DepartmentInput) =>
       Number(db.prepare('UPDATE departments SET name=?, updated_at=? WHERE id=?').run(d.name, now(), id).changes),
     deleteDepartment: (id: number) => Number(db.prepare('DELETE FROM departments WHERE id=?').run(id).changes),
+
+    listProfiles: () => db.prepare('SELECT id, name, updated_at AS updatedAt FROM profiles ORDER BY name').all() as Profile[],
+    getProfile: (id: number) =>
+      db.prepare('SELECT id, name, updated_at AS updatedAt FROM profiles WHERE id = ?').get(id) as Profile | undefined,
+    createProfile: (p: ProfileInput) =>
+      Number(db.prepare('INSERT INTO profiles (name, updated_at) VALUES (?,?)').run(p.name, now()).lastInsertRowid),
+    // Renomear um perfil renomeia-o também nos consultores que o usam (tudo ou nada).
+    renameProfile: (id: number, p: ProfileInput) =>
+      tx(() => {
+        const old = db.prepare('SELECT name FROM profiles WHERE id = ?').get(id) as { name: string } | undefined;
+        if (!old) return 0;
+        const changes = Number(db.prepare('UPDATE profiles SET name=?, updated_at=? WHERE id=?').run(p.name, now(), id).changes);
+        db.prepare('UPDATE consultants SET profile=?, updated_at=? WHERE profile=?').run(p.name, now(), old.name);
+        return changes;
+      }),
+    profileInUse: (name: string) =>
+      (db.prepare('SELECT COUNT(*) AS n FROM consultants WHERE profile = ?').get(name) as { n: number }).n > 0,
+    deleteProfile: (id: number) => Number(db.prepare('DELETE FROM profiles WHERE id=?').run(id).changes),
 
     listConsultants: () => withShares(db.prepare(`${CONSULTANT_SELECT} ORDER BY code`).all() as Row[]),
     getConsultant: (id: number) =>

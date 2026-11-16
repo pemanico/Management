@@ -1,13 +1,13 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { teamLabel } from '../home.ts';
 import { usePersistedState } from '../usePersistedState.ts';
-import { WORK_DAYS_PER_MONTH, WORK_MONTHS_PER_YEAR, CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Department, type Seniority, type Status, type Team } from '../../shared/types.ts';
+import { WORK_DAYS_PER_MONTH, WORK_MONTHS_PER_YEAR, CONSULTANT_KINDS, SENIORITIES, STATUSES, type Consultant, type ConsultantKind, type Department, type Profile, type Seniority, type Status, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatCents, parseEuroToCents } from '../money.ts';
 import { Field } from '../components/Field.tsx';
 import { ConfirmDelete } from '../components/ConfirmDelete.tsx';
 
-type Props = { teams: Team[]; departments: Department[]; consultants: Consultant[]; onChanged: () => Promise<void> };
+type Props = { teams: Team[]; departments: Department[]; profiles: Profile[]; consultants: Consultant[]; onChanged: () => Promise<void> };
 type Form = {
   code: string;
   teamId: string;
@@ -31,7 +31,7 @@ const SENIORITY_LABEL: Record<Seniority, string> = { junior: 'Júnior', pleno: '
 const KIND_LABEL: Record<ConsultantKind, string> = { internal: 'Interno', external: 'Externo' };
 const STATUS_LABEL: Record<Status, string> = { active: 'Ativo', inactive: 'Inativo' };
 
-export function ConsultantsView({ teams, departments, consultants, onChanged }: Props) {
+export function ConsultantsView({ teams, departments, profiles, consultants, onChanged }: Props) {
   const [form, setForm] = usePersistedState<Form>('gu:consultores:form', EMPTY);
   const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:consultores:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
@@ -96,7 +96,7 @@ export function ConsultantsView({ teams, departments, consultants, onChanged }: 
       if (!extraOk)
         next.extra = 'Cada equipa adicional precisa de equipa (diferente da principal, sem repetir) e de 1 a 99 %; a soma tem de ficar abaixo de 100 %.';
     }
-    if (form.profile.trim() === '') next.profile = 'Indica o perfil.';
+    if (form.profile === '') next.profile = 'Escolhe um perfil da lista (ou cria-o na página Perfis).';
     if (costCents === null) next.cost = 'Formato inválido. Exemplo: 450,00';
     else if (external && costCents === 0) next.cost = 'Um externo precisa de rate maior que zero.';
     if (external && (supplier === '' || supplier.length > 60)) next.supplier = 'Indica o fornecedor (máx. 60 caracteres).';
@@ -112,7 +112,7 @@ export function ConsultantsView({ teams, departments, consultants, onChanged }: 
           teamId: ofDept ? null : Number(form.teamId),
           departmentId: ofDept ? Number(form.departmentId) : null,
           extraTeams: ofDept ? [] : form.extra.map((x) => ({ teamId: Number(x.teamId), pct: Number(x.pct) })),
-          profile: form.profile.trim(),
+          profile: form.profile,
           seniority: form.seniority,
           kind: form.kind,
           costRateCentsPerDay: costCents,
@@ -192,8 +192,19 @@ export function ConsultantsView({ teams, departments, consultants, onChanged }: 
               )}
             </Field>
           )}
-          <Field label="Perfil" hint="Ex.: Data Engineer" error={errors.profile}>
-            {(c) => <input {...c} name="profile" type="text" autoComplete="off" value={form.profile} onChange={set('profile')} />}
+          <Field label="Perfil" hint="Lista única; os perfis criam-se e renomeiam na página Perfis." error={errors.profile}>
+            {(c) => (
+              <select {...c} name="profile" value={form.profile} onChange={set('profile')}>
+                <option value="">Escolher…</option>
+                {/* Mantém o perfil atual visível mesmo que já não esteja na lista (evita perder o valor ao editar). */}
+                {form.profile !== '' && !profiles.some((p) => p.name === form.profile) && (
+                  <option value={form.profile}>{form.profile} (fora da lista)</option>
+                )}
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            )}
           </Field>
           <Field label="Senioridade">
             {(c) => (

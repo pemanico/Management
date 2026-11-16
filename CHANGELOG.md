@@ -9,6 +9,7 @@ Do mais recente para o mais antigo.
 - Vistas montadas em paralelo: trocar de rota não perde o que estava escrito num formulário.
 - Rascunhos de formulário guardados no browser (localStorage) até gravar ou apagar.
 - Skill matrix mostra pessoas repartidas por outras equipas com a percentagem.
+- Perfis: lista única (combo) com perfis Big Data de trainee a manager; página Perfis para criar e renomear (renomear atualiza os consultores) e apagar (só se não estiver em uso). Perfis em texto livre das bases antigas passam automaticamente para a lista.
 
 ## 2026-11-13
 

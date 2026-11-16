@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import type { Allocation, Consultant, Department, Evaluation, Objective, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
+import type { Allocation, Consultant, Department, Evaluation, Profile, Objective, Project, Rating, Requirement, Skill, Summary, Team, Training } from '../shared/types.ts';
 import { api, ApiError } from './api.ts';
 import { SummaryView } from './views/SummaryView.tsx';
 import { TeamsView } from './views/TeamsView.tsx';
@@ -12,11 +12,13 @@ import { MatrixView } from './views/MatrixView.tsx';
 import { TrainingView } from './views/TrainingView.tsx';
 import { ObjectivesView } from './views/ObjectivesView.tsx';
 import { EvaluationsView } from './views/EvaluationsView.tsx';
+import { ProfilesView } from './views/ProfilesView.tsx';
 
 const ROUTES = [
   { id: 'resumo', label: 'Resumo' },
   { id: 'equipas', label: 'Equipas' },
   { id: 'consultores', label: 'Consultores' },
+  { id: 'perfis', label: 'Perfis' },
   { id: 'projetos', label: 'Projetos' },
   { id: 'alocacoes', label: 'Alocações' },
   { id: 'competencias', label: 'Competências' },
@@ -42,6 +44,7 @@ type Data = {
   summary: Summary;
   teams: Team[];
   departments: Department[];
+  profiles: Profile[];
   consultants: Consultant[];
   projects: Project[];
   allocations: Allocation[];
@@ -69,10 +72,11 @@ export function App() {
   // Os três pedidos são independentes: arrancam em paralelo (sem waterfall).
   const load = useCallback(async () => {
     try {
-      const [summary, teams, departments, consultants, projects, allocations, skills, ratings, requirements, trainings, objectives, evaluations] = await Promise.all([
+      const [summary, teams, departments, profiles, consultants, projects, allocations, skills, ratings, requirements, trainings, objectives, evaluations] = await Promise.all([
         api.summary(),
         api.teams(),
         api.departments(),
+        api.profiles(),
         api.consultants(),
         api.projects(),
         api.allocations(),
@@ -85,7 +89,7 @@ export function App() {
       ]);
       setState({
         status: 'ready',
-        data: { summary, teams, departments, consultants, projects, allocations, skills, ratings, requirements, trainings, objectives, evaluations },
+        data: { summary, teams, departments, profiles, consultants, projects, allocations, skills, ratings, requirements, trainings, objectives, evaluations },
       });
     } catch (err) {
       setState({ status: 'error', message: err instanceof ApiError ? err.message : 'Ocorreu um erro.' });
@@ -145,9 +149,13 @@ export function App() {
               <ConsultantsView
                 teams={state.data.teams}
                 departments={state.data.departments}
+                profiles={state.data.profiles}
                 consultants={state.data.consultants}
                 onChanged={saved}
               />
+            </Panel>
+            <Panel active={route === 'perfis'}>
+              <ProfilesView profiles={state.data.profiles} onChanged={saved} />
             </Panel>
             <Panel active={route === 'projetos'}>
               <ProjectsView

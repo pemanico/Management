@@ -17,6 +17,8 @@ import type {
   SkillInput,
   Department,
   DepartmentInput,
+  Profile,
+  ProfileInput,
   Summary,
   Team,
   TeamInput,
@@ -58,6 +60,10 @@ export const api = {
       ? request<Department>('/departments', 'POST', input)
       : request<Department>(`/departments/${id}`, 'PUT', input),
   deleteDepartment: (id: number) => request<{ ok: true }>(`/departments/${id}`, 'DELETE'),
+  profiles: () => request<Profile[]>('/profiles'),
+  saveProfile: (input: ProfileInput, id?: number) =>
+    id === undefined ? request<Profile>('/profiles', 'POST', input) : request<Profile>(`/profiles/${id}`, 'PUT', input),
+  deleteProfile: (id: number) => request<{ ok: true }>(`/profiles/${id}`, 'DELETE'),
   consultants: () => request<Consultant[]>('/consultants'),
   saveTeam: (input: TeamInput, id?: number) =>
     id === undefined ? request<Team>('/teams', 'POST', input) : request<Team>(`/teams/${id}`, 'PUT', input),

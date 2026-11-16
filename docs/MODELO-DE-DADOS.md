@@ -5,6 +5,7 @@
 | Tabela | O que guarda | Chave / restrições |
 | --- | --- | --- |
 | `teams` | Equipa, headcount orçamentado de internos e de externos, budget e gasto em euros (opcionais) | nome único |
+| `profiles` | Nome do perfil (lista única; os consultores escolhem da lista) | nome único; renomear propaga aos consultores |
 | `departments` | Nome | nome único |
 | `consultants` | Código, equipa principal **ou** departamento (nunca os dois), perfil, senioridade, tipo (interno/externo), fornecedor, rate/dia, fim de contrato, estado | código único; `CHECK` equipa XOR departamento |
 | `consultant_teams` | Outras equipas de uma pessoa, com percentagem (1–99) | (consultor, equipa) |
