@@ -35,7 +35,7 @@ const todayIso = () => businessDate();
 const blank = (): Form => ({ consultantId: '', skillId: '', level: '2', validated: false, evidence: '', assessedAt: todayIso() });
 
 export function MatrixView({ teams, consultants, skills, ratings, requirements, onChanged }: Props) {
-  const [form, setForm] = usePersistedState<Form>('gu:matriz:form', blank);
+  const [form, setForm] = usePersistedState<Form>('gu:matriz:form', blank());
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
