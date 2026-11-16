@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { usePersistedState } from '../usePersistedState.ts';
 import type { Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatHc, formatOptionalCents, parseHc, parseOptionalEuroToCents } from '../money.ts';
@@ -12,8 +13,8 @@ type Errors = Partial<Record<keyof Form, string>>;
 const EMPTY: Form = { name: '', budget: '', actual: '', plannedInt: '0', plannedExt: '0' };
 
 export function TeamsView({ teams, onChanged }: Props) {
-  const [form, setForm] = useState<Form>(EMPTY);
-  const [editingId, setEditingId] = useState<number | undefined>();
+  const [form, setForm] = usePersistedState<Form>('gu:equipas:form', EMPTY);
+  const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:equipas:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);

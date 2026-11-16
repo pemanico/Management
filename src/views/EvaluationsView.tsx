@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { usePersistedState } from '../usePersistedState.ts';
 import {
   EVALUATION_STATUSES,
   PERIOD_RE,
@@ -32,8 +33,8 @@ export function EvaluationsView({ teams, consultants, objectives, evaluations, o
   const today = businessDate();
   const year = today.slice(0, 4);
   const empty: Form = { consultantId: '', period: year, rating: '3', summary: '', status: 'draft', evaluatedAt: today };
-  const [form, setForm] = useState<Form>(empty);
-  const [editingId, setEditingId] = useState<number | undefined>();
+  const [form, setForm] = usePersistedState<Form>('gu:avaliacoes:form', empty);
+  const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:avaliacoes:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);

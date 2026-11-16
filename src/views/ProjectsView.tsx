@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { usePersistedState } from '../usePersistedState.ts';
 import { PRIORITIES, PROJECT_STATUSES, type Allocation, type Priority, type Project, type ProjectStatus, type Team } from '../../shared/types.ts';
 import { api, ApiError } from '../api.ts';
 import { centsToInput, formatOptionalCents, parseOptionalEuroToCents } from '../money.ts';
@@ -40,8 +41,8 @@ const EMPTY: Form = {
 };
 
 export function ProjectsView({ teams, projects, allocations, onChanged }: Props) {
-  const [form, setForm] = useState<Form>(EMPTY);
-  const [editingId, setEditingId] = useState<number | undefined>();
+  const [form, setForm] = usePersistedState<Form>('gu:projetos:form', EMPTY);
+  const [editingId, setEditingId] = usePersistedState<number | undefined>('gu:projetos:editing', undefined);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
